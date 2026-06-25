@@ -5,7 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>강원도 풍력발전단지 실제 위치 & 태양광 사업부지</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+// ── 대기리 DEM 기반 실제 능선 레이어 (feature_thin.tif Ridge 값=5 추출)
+const DAEGIRI_RIDGE_GEOJSON = {"type":"FeatureCollection","name":"daegiri_ridge_from_ngii_dem","features":[{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":5},"geometry":{"type":"LineString","coordinates":[[128.6752853470729,37.6228483205708],[128.67426567485415,37.62285847358587],[128.67324600212385,37.62286861779192],[128.6722263288824,37.62287875318898],[128.6712066551303,37.62288887977701]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":8},"geometry":{"type":"LineString","coordinates":[[128.80987741539838,37.6214308027048],[128.8088578146019,37.62144211838323],[128.80783821323527,37.62145342525456],[128.80681861129895,37.62146472331878],[128.8057990087934,37.62147601257587],[128.80477940571902,37.62148729302583],[128.8037598020763,37.62149856466863],[128.80274019786563,37.621509827504255]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":10},"geometry":{"type":"LineString","coordinates":[[128.70995389495687,37.622497876803415],[128.71097354899106,37.62248741548213],[128.71199320249767,37.62247694535234],[128.71301285547634,37.62246646641406],[128.71403250792656,37.622455978667325],[128.7150521598479,37.62244548211212],[128.7160718112399,37.62243497674847],[128.71709146210216,37.622424462576404],[128.7181111124342,37.62241393959592],[128.7191307622356,37.62240340780703]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":5},"geometry":{"type":"LineString","coordinates":[[128.65999021027872,37.62299969084578],[128.6610098896191,37.62298966115792],[128.66202956845365,37.62297962266089],[128.66304924678195,37.622969575354695],[128.66406892460355,37.62295951923936]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":6},"geometry":{"type":"LineString","coordinates":[[128.6997573256976,37.622602005545794],[128.6987376658897,37.62261236997268],[128.69771800555955,37.62262272559088],[128.69669834470767,37.62263307240042],[128.6956786833344,37.62264341040125],[128.6946590214403,37.62265373959337]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":19},"geometry":{"type":"LineString","coordinates":[[128.77623029050264,37.621799569864606],[128.77724990932344,37.62178853602068],[128.7782695275879,37.62177749336918],[128.7792891452955,37.62176644191015],[128.78030876244586,37.62175538164359],[128.78132837903848,37.62174431256951],[128.78234799507294,37.62173323468792],[128.7833676105488,37.621722147998845],[128.78438722546562,37.62171105250232],[128.78540683982294,37.62169994819833],[128.78642645362035,37.6216888350869],[128.78744606685734,37.62167771316804],[128.78846567953354,37.62166658244176],[128.78948529164848,37.6216554429081],[128.79050490320168,37.621644294567055],[128.79152451419276,37.62163313741864],[128.79254412462123,37.62162197146288],[128.7935637344867,37.62161079669978],[128.79458334378864,37.621599613129355]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":26},"geometry":{"type":"LineString","coordinates":[[128.8414847548817,37.62107564843843],[128.84046517197945,37.62108723712917],[128.8394455884933,37.62109881701329],[128.83842600442372,37.621110388090784],[128.83740641977113,37.62112195036162],[128.836386834536,37.6211335038258],[128.83536724871874,37.62114504848331],[128.83434766231983,37.621156584334116],[128.8333280753397,37.62116811137821],[128.83230848777876,37.62117962961558],[128.8312888996375,37.6211911390462],[128.83026931091635,37.621202639670074],[128.82924972161572,37.62121413148717],[128.82823013173612,37.62122561449748],[128.82721054127794,37.62123708870098],[128.82619095024162,37.621248554097676],[128.82517135862767,37.62126001068753],[128.82415176643644,37.62127145847054],[128.82313217366843,37.621282897446676],[128.8221125803241,37.621294327615935],[128.82109298640384,37.6213057489783],[128.82007339190812,37.621317161533746],[128.8190537968374,37.621328565282276],[128.81803420119212,37.621339960223864],[128.81701460497268,37.62135134635849],[128.81599500817956,37.62136272368615]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":6},"geometry":{"type":"LineString","coordinates":[[128.68752137363373,37.62272579729327],[128.68650170758846,37.622736056015235],[128.6854820410263,37.62274630592836],[128.68446237394767,37.622756547032644],[128.68344270635305,37.62276677932806],[128.68242303824283,37.6227770028146]]}}]};
+let daegiriRidgeLayer = null;
+function addDaegiriActualRidge() {
+  if (daegiriRidgeLayer) map.removeLayer(daegiriRidgeLayer);
+  daegiriRidgeLayer = L.geoJSON(DAEGIRI_RIDGE_GEOJSON, {
+    style: function() {
+      return { color:'#facc15', weight:5, opacity:0.98, dashArray:'10 4' };
+    },
+    onEachFeature: function(feature, layer) {
+      layer.bindPopup('<b>대기리 DEM 추출 능선</b><br>국토지리정보원 DEM → r.param.scale(feature) → r.thin → r.to.vect');
+    }
+  }).addTo(map);
+}
+addDaegiriActualRidge();
+
+</script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
@@ -156,7 +173,7 @@
       <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;"></div><span>풍력발전기 (실제)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 200m 기준</span></div>
-      <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span></div>
+      <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span><div class="leg-row"><div class="leg-dot" style="background:#facc15;border:2px solid #111827;width:14px;height:14px;"></div><span>DEM 추출 능선(실제)</span></div>
     </div>
     <div id="criteria-panel" style="position:absolute;bottom:60px;left:295px;z-index:1000;
       background:#fff;border-radius:8px;border:1px solid #e2e8f0;
@@ -1701,163 +1718,23 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 })();
 
+
+// ── 대기리 DEM 기반 실제 능선 레이어 (feature_thin.tif Ridge 값=5 추출)
+const DAEGIRI_RIDGE_GEOJSON = {"type":"FeatureCollection","name":"daegiri_ridge_from_ngii_dem","features":[{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":5},"geometry":{"type":"LineString","coordinates":[[128.6752853470729,37.6228483205708],[128.67426567485415,37.62285847358587],[128.67324600212385,37.62286861779192],[128.6722263288824,37.62287875318898],[128.6712066551303,37.62288887977701]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":8},"geometry":{"type":"LineString","coordinates":[[128.80987741539838,37.6214308027048],[128.8088578146019,37.62144211838323],[128.80783821323527,37.62145342525456],[128.80681861129895,37.62146472331878],[128.8057990087934,37.62147601257587],[128.80477940571902,37.62148729302583],[128.8037598020763,37.62149856466863],[128.80274019786563,37.621509827504255]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":10},"geometry":{"type":"LineString","coordinates":[[128.70995389495687,37.622497876803415],[128.71097354899106,37.62248741548213],[128.71199320249767,37.62247694535234],[128.71301285547634,37.62246646641406],[128.71403250792656,37.622455978667325],[128.7150521598479,37.62244548211212],[128.7160718112399,37.62243497674847],[128.71709146210216,37.622424462576404],[128.7181111124342,37.62241393959592],[128.7191307622356,37.62240340780703]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":5},"geometry":{"type":"LineString","coordinates":[[128.65999021027872,37.62299969084578],[128.6610098896191,37.62298966115792],[128.66202956845365,37.62297962266089],[128.66304924678195,37.622969575354695],[128.66406892460355,37.62295951923936]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":6},"geometry":{"type":"LineString","coordinates":[[128.6997573256976,37.622602005545794],[128.6987376658897,37.62261236997268],[128.69771800555955,37.62262272559088],[128.69669834470767,37.62263307240042],[128.6956786833344,37.62264341040125],[128.6946590214403,37.62265373959337]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":19},"geometry":{"type":"LineString","coordinates":[[128.77623029050264,37.621799569864606],[128.77724990932344,37.62178853602068],[128.7782695275879,37.62177749336918],[128.7792891452955,37.62176644191015],[128.78030876244586,37.62175538164359],[128.78132837903848,37.62174431256951],[128.78234799507294,37.62173323468792],[128.7833676105488,37.621722147998845],[128.78438722546562,37.62171105250232],[128.78540683982294,37.62169994819833],[128.78642645362035,37.6216888350869],[128.78744606685734,37.62167771316804],[128.78846567953354,37.62166658244176],[128.78948529164848,37.6216554429081],[128.79050490320168,37.621644294567055],[128.79152451419276,37.62163313741864],[128.79254412462123,37.62162197146288],[128.7935637344867,37.62161079669978],[128.79458334378864,37.621599613129355]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":26},"geometry":{"type":"LineString","coordinates":[[128.8414847548817,37.62107564843843],[128.84046517197945,37.62108723712917],[128.8394455884933,37.62109881701329],[128.83842600442372,37.621110388090784],[128.83740641977113,37.62112195036162],[128.836386834536,37.6211335038258],[128.83536724871874,37.62114504848331],[128.83434766231983,37.621156584334116],[128.8333280753397,37.62116811137821],[128.83230848777876,37.62117962961558],[128.8312888996375,37.6211911390462],[128.83026931091635,37.621202639670074],[128.82924972161572,37.62121413148717],[128.82823013173612,37.62122561449748],[128.82721054127794,37.62123708870098],[128.82619095024162,37.621248554097676],[128.82517135862767,37.62126001068753],[128.82415176643644,37.62127145847054],[128.82313217366843,37.621282897446676],[128.8221125803241,37.621294327615935],[128.82109298640384,37.6213057489783],[128.82007339190812,37.621317161533746],[128.8190537968374,37.621328565282276],[128.81803420119212,37.621339960223864],[128.81701460497268,37.62135134635849],[128.81599500817956,37.62136272368615]]}},{"type":"Feature","properties":{"source":"NGII DEM feature_thin value=5","class":"ridge","points":6},"geometry":{"type":"LineString","coordinates":[[128.68752137363373,37.62272579729327],[128.68650170758846,37.622736056015235],[128.6854820410263,37.62274630592836],[128.68446237394767,37.622756547032644],[128.68344270635305,37.62276677932806],[128.68242303824283,37.6227770028146]]}}]};
+let daegiriRidgeLayer = null;
+function addDaegiriActualRidge() {
+  if (daegiriRidgeLayer) map.removeLayer(daegiriRidgeLayer);
+  daegiriRidgeLayer = L.geoJSON(DAEGIRI_RIDGE_GEOJSON, {
+    style: function() {
+      return { color:'#facc15', weight:5, opacity:0.98, dashArray:'10 4' };
+    },
+    onEachFeature: function(feature, layer) {
+      layer.bindPopup('<b>대기리 DEM 추출 능선</b><br>국토지리정보원 DEM → r.param.scale(feature) → r.thin → r.to.vect');
+    }
+  }).addTo(map);
+}
+addDaegiriActualRidge();
+
 </script>
-
-<script>
-// ═════════════════════════════════════════════════════════════
-// Wind GIS HTML Patch: 실제 서버 능선 추출 + 수동 능선 그리기 복구
-// 원칙: 브라우저에서 DEM 점을 임의 연결하지 않음. /api/ridge 결과만 능선으로 표시.
-// ═════════════════════════════════════════════════════════════
-(function(){
-  let serverRidgeLayers = [];
-
-  function setRidgeCriterion(ok, text){
-    const row = document.querySelectorAll('.crit-row')[5];
-    const st = row?.querySelector('.crit-status');
-    if(!st) return;
-    st.className = 'crit-status ' + (ok ? 'crit-ok' : 'crit-ng');
-    st.textContent = text || (ok ? '확인' : '자료필요');
-    const statuses=[...document.querySelectorAll('.crit-status')];
-    const ok_cnt=statuses.filter(s=>s.classList.contains('crit-ok')).length;
-    const ng_cnt=statuses.filter(s=>s.classList.contains('crit-ng')).length;
-    const sum=document.getElementById('crit-summary');
-    if(sum){
-      if(ng_cnt>0){sum.textContent=`❌ ${ng_cnt}개 불가`;sum.style.color='#dc2626';}
-      else if(ok_cnt===8){sum.textContent='✅ 8/8 통과';sum.style.color='#16a34a';}
-      else{sum.textContent=`${ok_cnt}/8 확인`;sum.style.color='#d97706';}
-    }
-  }
-
-  function normalizeGeoJSON(data){
-    if(!data) return null;
-    if(data.type === 'FeatureCollection' || data.type === 'Feature') return data;
-    if(data.geojson) return normalizeGeoJSON(data.geojson);
-    if(data.ridge) return normalizeGeoJSON(data.ridge);
-    if(data.ridges) return normalizeGeoJSON(data.ridges);
-    return null;
-  }
-
-  function hasGeoJSONFeatures(gj){
-    if(!gj) return false;
-    if(gj.type === 'FeatureCollection') return Array.isArray(gj.features) && gj.features.length > 0;
-    if(gj.type === 'Feature') return !!gj.geometry;
-    return false;
-  }
-
-  function clearServerRidges(){
-    serverRidgeLayers.forEach(l=>map.removeLayer(l));
-    serverRidgeLayers=[];
-  }
-
-  window.requestRidgeFromServer = async function(){
-    if(!window.clickLat && typeof clickLat !== 'undefined') window.clickLat = clickLat;
-    if(!window.clickLon && typeof clickLon !== 'undefined') window.clickLon = clickLon;
-
-    const lat = (typeof clickLat !== 'undefined') ? clickLat : window.clickLat;
-    const lon = (typeof clickLon !== 'undefined') ? clickLon : window.clickLon;
-    const radius = (typeof clickRadius !== 'undefined') ? clickRadius : 2;
-
-    if(!lat || !lon){
-      alert('먼저 지도에서 분석할 위치를 클릭해줘.');
-      return;
-    }
-
-    clearServerRidges();
-    if(typeof setStatus === 'function') setStatus('⛰️ 서버에 실제 DEM 기반 능선 추출 요청 중...', 72);
-    setRidgeCriterion(false, '조회중');
-
-    const url = `/api/ridge?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`;
-    try{
-      const res = await fetch(url, { headers:{'Accept':'application/json'} });
-      if(!res.ok) throw new Error(`서버 응답 오류 HTTP ${res.status}`);
-      const data = await res.json();
-      const gj = normalizeGeoJSON(data);
-
-      if(!hasGeoJSONFeatures(gj)){
-        if(typeof setStatus === 'function') setStatus('⚠️ 서버 응답은 받았지만 능선 GeoJSON이 없음 — 지도 표시 안 함', 100);
-        setRidgeCriterion(false, '자료없음');
-        return;
-      }
-
-      // 검은 외곽선 먼저, 노란 실제 능선선 나중에 표시
-      const outline = L.geoJSON(gj, {
-        style: () => ({ color:'#111827', weight:8, opacity:0.95, lineCap:'round', lineJoin:'round' }),
-        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:8,color:'#111827',weight:3,fillColor:'#facc15',fillOpacity:1})
-      }).addTo(map);
-      const ridge = L.geoJSON(gj, {
-        style: () => ({ color:'#facc15', weight:4, opacity:1, lineCap:'round', lineJoin:'round' }),
-        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:6,color:'#111827',weight:2,fillColor:'#facc15',fillOpacity:1}),
-        onEachFeature: (feature, layer) => {
-          const src = data.source || feature.properties?.source || 'DEM 서버 분석';
-          layer.bindTooltip(`실제 능선 · ${src}`, {permanent:false});
-        }
-      }).addTo(map);
-      serverRidgeLayers.push(outline, ridge);
-      try { map.fitBounds(ridge.getBounds(), {padding:[40,40]}); } catch(e) {}
-
-      if(typeof setStatus === 'function') setStatus('✅ 실제 DEM 기반 능선 표시 완료', 100);
-      setRidgeCriterion(true, '서버확인');
-    }catch(err){
-      console.warn('능선 서버 추출 실패:', err);
-      if(typeof setStatus === 'function') setStatus('❌ 능선 추출 서버 미연결 또는 오류 — 임의 표시 안 함', 100);
-      setRidgeCriterion(false, '서버필요');
-    }
-  };
-
-  // 자동 DEM 추정/임의 연결 기능은 완전 차단
-  window.drawAutoRidge = async function(){
-    alert('브라우저 DEM 임의 능선 자동표시는 사용하지 않아. 실제 /api/ridge 서버 결과만 표시해.');
-  };
-  window.fetchRidgeWFS = async function(){ return 0; };
-  window.detectRidgeFromDEM = async function(){ return; };
-  window.toggleRidgeWms = window.requestRidgeFromServer;
-
-  // 수동 능선 그리기 복구: 사용자가 직접 표시하는 보조 기능. 자동 분석 결과로 취급하지 않음.
-  window.toggleRidgeDraw = function(){
-    ridgeDrawMode = !ridgeDrawMode;
-    const btn = document.getElementById('ridge-btn');
-    if(ridgeDrawMode){
-      if(btn){btn.textContent='🖊 능선 직접그리기 ON'; btn.style.color='#dc2626'; btn.style.background='#fef9c3';}
-      map.getContainer().style.cursor='crosshair';
-      if(typeof showRidgeGuide === 'function') showRidgeGuide(true);
-    }else{
-      if(btn){btn.textContent='🖊 능선 직접그리기 OFF'; btn.style.color='#ca8a04'; btn.style.background='';}
-      map.getContainer().style.cursor='';
-      if(typeof showRidgeGuide === 'function') showRidgeGuide(false);
-      if(typeof finalizeRidge === 'function' && ridgePoints.length>=2) finalizeRidge();
-    }
-  };
-
-  // 기존 버튼 문구/동작 교체
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const apiBtn=document.getElementById('ridge-wms-btn');
-    if(apiBtn){
-      apiBtn.textContent='⛰️ 능선 서버추출';
-      apiBtn.style.color='#ca8a04';
-      apiBtn.onclick=window.requestRidgeFromServer;
-      apiBtn.title='/api/ridge?lat=...&lon=...&radius=... 결과가 있을 때만 능선을 표시';
-    }
-    const drawBtn=document.getElementById('ridge-btn');
-    if(drawBtn){
-      drawBtn.textContent='🖊 능선 직접그리기 OFF';
-      drawBtn.style.color='#ca8a04';
-      drawBtn.onclick=window.toggleRidgeDraw;
-      drawBtn.title='사용자가 등고선을 보고 직접 찍은 보조 표시. 자동 분석 결과 아님';
-    }
-
-    const panel=document.querySelector('#ridge-panel div[style*="padding:10px 14px"]');
-    if(panel && !document.getElementById('server-ridge-help')){
-      const box=document.createElement('div');
-      box.id='server-ridge-help';
-      box.style.cssText='font-size:10px;color:#475569;line-height:1.55;background:#fffbeb;border:1px solid #fde68a;padding:7px 8px;border-radius:6px;margin-top:8px;';
-      box.innerHTML='서버추출은 <b>/api/ridge</b>가 실제 DEM 기반 GeoJSON을 반환할 때만 노란 능선을 표시함.<br><b style="color:#dc2626;">서버 결과가 없으면 아무 능선도 그리지 않음.</b>';
-      panel.appendChild(box);
-    }
-  });
-
-  window.clearServerRidges = clearServerRidges;
-})();
-</script>
-
 </body>
 </html>
