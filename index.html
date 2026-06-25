@@ -320,11 +320,11 @@ const POLY_2CHA = [
 
 // ── Vworld 지도
 const LAYERS = {
-  satellite: L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:19}),
-  hybrid:    L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:19}),
-  base:      L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,{attribution:'© Vworld',maxZoom:19}),
+  satellite: L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
+  hybrid:    L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
+  base:      L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
 };
-const HYBRID_LABEL = L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,{attribution:'',maxZoom:19});
+const HYBRID_LABEL = L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,{attribution:'',maxZoom:22,maxNativeZoom:19});
 
 const map = L.map('map').setView([37.55, 128.20], 9);
 LAYERS.satellite.addTo(map);
@@ -606,12 +606,11 @@ function toggleEco(){
 // Hybrid 타일 = 도로명 + 지형지물 포함
 const ridgeWmsLayer = L.tileLayer(
   `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,
-  { attribution:"© Vworld", maxZoom:19, opacity:1.0 }
+  { attribution:"© Vworld", maxZoom:22, maxNativeZoom:19, opacity:1.0 }
 );
-// 수치지형도 타일 (등고선 포함) — 위성 위에 반투명 오버레이
 const contourWmsLayer = L.tileLayer(
   `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,
-  { attribution:"© Vworld", maxZoom:19, opacity:0.45 }
+  { attribution:"© Vworld", maxZoom:22, maxNativeZoom:19, opacity:0.45 }
 );
 
 let ridgeWmsOn=false, contourOn=false;
