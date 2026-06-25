@@ -135,6 +135,10 @@
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태자연도 OFF</button>
+      <button onclick="toggleRidgeWms()" id="ridge-wms-btn" style="color:#ca8a04;">〰 능선 레이어 OFF</button>
+      <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
+      <button onclick="toggleRidgeDraw()" id="ridge-btn" style="color:#ca8a04;">🖊 능선 직접그리기 OFF</button>
+      <button onclick="clearAllRidges()" style="color:#dc2626;">🗑 능선 전체 삭제</button>
     </div>
 
     <div id="info-panel">
@@ -596,6 +600,96 @@ function toggleEco(){
   const el=document.getElementById('eco-btn');
   if(el){el.textContent=`🌿 생태자연도 ${ecoOn?'ON':'OFF'}`;
     el.style.color=ecoOn?'#dc2626':'#16a34a';}
+}
+
+// ── Vworld WMTS 능선+등고선 레이어 (CORS 없음)
+// Hybrid 타일 = 도로명 + 지형지물 포함
+const ridgeWmsLayer = L.tileLayer(
+  `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,
+  { attribution:"© Vworld", maxZoom:19, opacity:1.0 }
+);
+// 수치지형도 타일 (등고선 포함) — 위성 위에 반투명 오버레이
+const contourWmsLayer = L.tileLayer(
+  `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,
+  { attribution:"© Vworld", maxZoom:19, opacity:0.45 }
+);
+
+let ridgeWmsOn=false, contourOn=false;
+
+// ── Vworld WFS 능선 벡터 — 클릭 지점 인근 실제 능선 좌표 추출 후 노란 점선 표시
+let wfsRidgeLayers=[];
+async function fetchRidgeWFS(lat, lon, radiusKm){
+  // 기존 WFS 능선 제거
+  wfsRidgeLayers.forEach(l=>map.removeLayer(l));
+  wfsRidgeLayers=[];
+
+  const d = radiusKm / 111.0;
+  const bbox = `${lon-d},${lat-d},${lon+d},${lat+d}`;
+  try {
+    const url = `https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature`+
+      `&typename=lt_l_rdl&bbox=${bbox},EPSG:4326`+
+      `&outputFormat=application/json&key=${VWORLD_KEY}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const features = json.features || [];
+
+    if(features.length === 0){
+      console.log('WFS 능선: 해당 범위 데이터 없음');
+      return 0;
+    }
+
+    features.forEach(f=>{
+      const coords = f.geometry?.coordinates;
+      if(!coords) return;
+      const type = f.geometry.type;
+
+      let lines = [];
+      if(type==='LineString') lines=[coords];
+      else if(type==='MultiLineString') lines=coords;
+
+      lines.forEach(line=>{
+        const pts = line.map(c=>[c[1],c[0]]); // [lon,lat] → [lat,lon]
+        // 노란 점선 능선 라인
+        const l = L.polyline(pts,{
+          color:'#facc15', weight:3, dashArray:'12 7',
+          opacity:0.95, zIndexOffset:600
+        }).addTo(map).bindTooltip('능선',{permanent:false,direction:'top'});
+        wfsRidgeLayers.push(l);
+
+        // 능선 중간에 라벨
+        const mid = pts[Math.floor(pts.length/2)];
+        const lb = L.marker(mid,{
+          icon:L.divIcon({
+            html:`<div style="background:rgba(30,41,59,0.85);color:#fef08a;
+                  padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;
+                  white-space:nowrap;border:1.5px solid #facc15;">능선부</div>`,
+            iconSize:[52,18],iconAnchor:[26,9],className:''
+          }),zIndexOffset:700
+        }).addTo(map);
+        wfsRidgeLayers.push(lb);
+      });
+    });
+    return features.length;
+  } catch(e){
+    console.log('WFS 능선 조회 오류:', e.message);
+    return 0;
+  }
+}
+
+function toggleRidgeWms(){
+  ridgeWmsOn=!ridgeWmsOn;
+  ridgeWmsOn?ridgeWmsLayer.addTo(map):map.removeLayer(ridgeWmsLayer);
+  const el=document.getElementById('ridge-wms-btn');
+  if(el){el.textContent=`〰 능선 레이어 ${ridgeWmsOn?'ON':'OFF'}`;
+    el.style.color=ridgeWmsOn?'#dc2626':'#ca8a04';}
+}
+
+function toggleContour(){
+  contourOn=!contourOn;
+  contourOn?contourWmsLayer.addTo(map):map.removeLayer(contourWmsLayer);
+  const el=document.getElementById('contour-btn');
+  if(el){el.textContent=`📐 등고선 ${contourOn?'ON':'OFF'}`;
+    el.style.color=contourOn?'#dc2626':'#7c3aed';}
 }
 
 function toggleCriteria(e){
@@ -1215,12 +1309,236 @@ async function startAnalysis(){
       clickResultLayers.push(m,lb);
     });
     setStatus(`✅ ${passed.length}기 후보 표시 완료`,100);
+  // DEM 기반 능선 자동 감지
+  await detectRidgeFromDEM(elevData, clickLat, clickLon);
+  // WFS 능선 자동 조회 (노란 점선)
+  setStatus('🗺 능선 데이터 조회 중...', 98);
+  const ridgeCnt = await fetchRidgeWFS(clickLat, clickLon, clickRadius);
+  if(ridgeCnt>0) setStatus(`✅ 능선 ${ridgeCnt}개 표시 완료`, 100);
+  else setStatus(`✅ 분석 완료 (능선 WFS 데이터 없음 — 능선 레이어 버튼으로 확인)`, 100);
   } else {
     setStatus('❌ 터빈 후보 자동표시 없음 — 임의 배치 금지, 능선 육안확인 필요',100);
+  await detectRidgeFromDEM(elevData, clickLat, clickLon);
   }
 
   btn.disabled=false; btn.textContent='▶ 분석 시작';
 }
+// ══════════════════════════════════════════
+// 능선부 표시 기능 (A: DEM 자동 + C: 수동 그리기)
+// ══════════════════════════════════════════
+
+let ridgeDrawMode = false;
+let ridgePoints   = [];   // 수동 그리기 점들
+let ridgeLayers   = [];   // 지도에 표시된 능선 레이어들
+let ridgeTempMarkers = [];
+let ridgePolyline = null;
+let ridgeAutoLayers = []; // DEM 자동 감지 레이어
+
+// ── 능선 그리기 모드 토글
+function toggleRidgeDraw(){
+  ridgeDrawMode = !ridgeDrawMode;
+  const btn = document.getElementById('ridge-btn');
+  if(ridgeDrawMode){
+    btn.textContent = '🖊 능선 그리기 ON';
+    btn.style.color = '#dc2626';
+    btn.style.background = '#fef9c3';
+    map.getContainer().style.cursor = 'crosshair';
+    showRidgeGuide(true);
+  } else {
+    btn.textContent = '🖊 능선 그리기 OFF';
+    btn.style.color = '#ca8a04';
+    btn.style.background = '';
+    map.getContainer().style.cursor = '';
+    showRidgeGuide(false);
+    if(ridgePoints.length >= 2) finalizeRidge();
+  }
+}
+
+// 가이드 메시지
+function showRidgeGuide(on){
+  let el = document.getElementById('ridge-guide');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'ridge-guide';
+    el.style.cssText = `position:absolute;top:58px;left:50%;transform:translateX(-50%);
+      z-index:1100;background:rgba(30,41,59,0.88);color:#fef08a;padding:6px 16px;
+      border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;
+      pointer-events:none;`;
+    document.getElementById('map-wrap').appendChild(el);
+  }
+  el.style.display = on ? 'block' : 'none';
+  el.textContent = '🖊 능선 위를 클릭해 점을 찍어주세요 · 그리기 OFF로 완료';
+}
+
+// 능선 그리기 클릭 핸들러
+map.on('click', function(e){
+  if(!ridgeDrawMode) return;
+  const lat = e.latlng.lat, lon = e.latlng.lng;
+  ridgePoints.push([lat, lon]);
+
+  // 점 마커
+  const m = L.circleMarker([lat,lon],{
+    radius:5, fillColor:'#facc15', color:'#fff', weight:2,
+    fillOpacity:1, zIndexOffset:700
+  }).addTo(map);
+  ridgeTempMarkers.push(m);
+
+  // 실시간 라인 업데이트
+  if(ridgePolyline) map.removeLayer(ridgePolyline);
+  if(ridgePoints.length >= 2){
+    ridgePolyline = L.polyline(ridgePoints,{
+      color:'#facc15', weight:3, dashArray:'10 6', opacity:0.9
+    }).addTo(map);
+  }
+});
+
+// 능선 확정 — 노란 점선 + 타원
+function finalizeRidge(){
+  if(ridgePoints.length < 2) return;
+
+  // 임시 마커 제거
+  ridgeTempMarkers.forEach(m=>map.removeLayer(m));
+  ridgeTempMarkers = [];
+  if(ridgePolyline){ map.removeLayer(ridgePolyline); ridgePolyline=null; }
+
+  // ── 노란 점선 능선 라인
+  const line = L.polyline(ridgePoints,{
+    color:'#facc15', weight:3.5, dashArray:'12 7', opacity:1, zIndexOffset:600
+  }).addTo(map);
+  ridgeLayers.push(line);
+
+  // ── 능선부 타원 (중심점 + 장축/단축 계산)
+  const lats = ridgePoints.map(p=>p[0]);
+  const lons = ridgePoints.map(p=>p[1]);
+  const cLat = (Math.min(...lats)+Math.max(...lats))/2;
+  const cLon = (Math.min(...lons)+Math.max(...lons))/2;
+
+  // 장축 반경: 능선 길이의 절반
+  const R=6371000;
+  let totalLen=0;
+  for(let i=1;i<ridgePoints.length;i++){
+    const dl=(ridgePoints[i][0]-ridgePoints[i-1][0])*Math.PI/180;
+    const dlo=(ridgePoints[i][1]-ridgePoints[i-1][1])*Math.PI/180;
+    const a=Math.sin(dl/2)**2+Math.cos(ridgePoints[i-1][0]*Math.PI/180)*Math.cos(ridgePoints[i][0]*Math.PI/180)*Math.sin(dlo/2)**2;
+    totalLen+=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+  const semiMajor = Math.max(totalLen/2, 500); // 최소 500m
+  const semiMinor = semiMajor * 0.35;
+
+  // 타원 근사 (폴리곤으로)
+  const angle = calcBearing(ridgePoints[0], ridgePoints[ridgePoints.length-1]);
+  const ellipsePts = buildEllipse(cLat, cLon, semiMajor, semiMinor, angle);
+  const ellipse = L.polygon(ellipsePts,{
+    color:'#facc15', weight:2.5, dashArray:'10 6',
+    fill:true, fillColor:'#84cc16', fillOpacity:0.25,
+    zIndexOffset:590
+  }).addTo(map);
+  ridgeLayers.push(ellipse);
+
+  // ── 능선부 라벨
+  const label = L.marker([cLat, cLon],{
+    icon:L.divIcon({
+      html:`<div style="background:rgba(30,41,59,0.85);color:#fef08a;
+            padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;
+            white-space:nowrap;border:1.5px solid #facc15;
+            box-shadow:0 1px 4px rgba(0,0,0,0.4);">능선부</div>`,
+      iconSize:[60,22],iconAnchor:[30,11],className:''
+    }),zIndexOffset:700
+  }).addTo(map);
+  ridgeLayers.push(label);
+
+  ridgePoints = [];
+}
+
+// 방위각 계산
+function calcBearing(p1, p2){
+  const lat1=p1[0]*Math.PI/180, lat2=p2[0]*Math.PI/180;
+  const dLon=(p2[1]-p1[1])*Math.PI/180;
+  const y=Math.sin(dLon)*Math.cos(lat2);
+  const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+  return Math.atan2(y,x);
+}
+
+// 타원 폴리곤 생성
+function buildEllipse(cLat, cLon, semiMajor, semiMinor, rotAngle){
+  const pts=[], steps=48;
+  const latM=1/111320, lonM=1/(111320*Math.cos(cLat*Math.PI/180));
+  for(let i=0;i<steps;i++){
+    const theta=(2*Math.PI*i)/steps;
+    const x=semiMajor*Math.cos(theta);
+    const y=semiMinor*Math.sin(theta);
+    const rx=x*Math.cos(rotAngle)-y*Math.sin(rotAngle);
+    const ry=x*Math.sin(rotAngle)+y*Math.cos(rotAngle);
+    pts.push([cLat+ry*latM, cLon+rx*lonM]);
+  }
+  return pts;
+}
+
+// ── 능선 전체 삭제
+function clearAllRidges(){
+  ridgeLayers.forEach(l=>map.removeLayer(l));
+  ridgeLayers=[];
+  ridgeAutoLayers.forEach(l=>map.removeLayer(l));
+  ridgeAutoLayers=[];
+  wfsRidgeLayers.forEach(l=>map.removeLayer(l));
+  wfsRidgeLayers=[];
+  ridgeTempMarkers.forEach(m=>map.removeLayer(m));
+  ridgeTempMarkers=[];
+  if(ridgePolyline){map.removeLayer(ridgePolyline);ridgePolyline=null;}
+  ridgePoints=[];
+}
+
+// ── DEM 기반 능선 자동 감지 (분석 완료 후 호출)
+async function detectRidgeFromDEM(elevData, centerLat, centerLon){
+  if(!elevData||elevData.length===0) return;
+  ridgeAutoLayers.forEach(l=>map.removeLayer(l));
+  ridgeAutoLayers=[];
+
+  // 로컬 최고점 찾기 (4방향 인접 격자보다 높은 점)
+  const step=0.0032;
+  const ridgeCandidates=[];
+  elevData.forEach(p=>{
+    if(p.elev<500) return;
+    const neighbors=[
+      elevData.find(x=>Math.abs(x.lat-(p.lat+step))<0.002&&Math.abs(x.lon-p.lon)<0.002),
+      elevData.find(x=>Math.abs(x.lat-(p.lat-step))<0.002&&Math.abs(x.lon-p.lon)<0.002),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<0.002&&Math.abs(x.lon-(p.lon+step))<0.002),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<0.002&&Math.abs(x.lon-(p.lon-step))<0.002),
+    ].filter(Boolean);
+    // 2방향 이상에서 높은 점 = 능선
+    const higherCount=neighbors.filter(n=>p.elev>=n.elev).length;
+    if(higherCount>=3) ridgeCandidates.push(p);
+  });
+
+  if(ridgeCandidates.length<2) return;
+
+  // 능선 후보 초록 점 표시
+  ridgeCandidates.forEach(p=>{
+    const m=L.circleMarker([p.lat,p.lon],{
+      radius:4,fillColor:'#84cc16',color:'#fff',weight:1,fillOpacity:0.7,zIndexOffset:400
+    }).addTo(map).bindTooltip(`능선 ${p.elev}m`,{permanent:false});
+    ridgeAutoLayers.push(m);
+  });
+
+  // 능선 연결선 (위도 순 정렬)
+  const sorted=ridgeCandidates.slice().sort((a,b)=>a.lat-b.lat);
+  const autoLine=L.polyline(sorted.map(p=>[p.lat,p.lon]),{
+    color:'#84cc16',weight:2,dashArray:'8 5',opacity:0.7
+  }).addTo(map);
+  ridgeAutoLayers.push(autoLine);
+}
+
+// 능선 삭제 버튼 — 분석 패널에 추가
+document.addEventListener('DOMContentLoaded',()=>{
+  const ab=document.getElementById('analyze-body');
+  if(!ab) return;
+  const clearBtn=document.createElement('button');
+  clearBtn.textContent='🗑 능선 표시 전체 삭제';
+  clearBtn.style.cssText=`width:100%;margin-top:6px;padding:6px;font-size:10px;
+    background:#fef9c3;color:#92400e;border:1px solid #fde68a;border-radius:6px;cursor:pointer;`;
+  clearBtn.onclick=clearAllRidges;
+  ab.appendChild(clearBtn);
+});
 </script>
 </body>
 </html>
