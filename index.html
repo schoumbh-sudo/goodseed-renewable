@@ -65,10 +65,16 @@
   .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .leg-sq  { width: 12px; height: 8px; border-radius: 1px; flex-shrink: 0; }
   .crit-row { padding:5px 12px; font-size:11px; color:#334155; border-bottom:1px solid #f8fafc;
-    display:flex; align-items:center; justify-content:space-between; }
+    display:flex; align-items:center; gap:6px; cursor:pointer; transition:background 0.1s; }
+  .crit-row:hover { background:#f1f5f9; }
   .crit-row:last-of-type { border-bottom:none; }
-  .crit-row::before { content:'✅'; margin-right:6px; font-size:10px; }
-  .crit-src { font-size:9px; color:#94a3b8; margin-left:6px; white-space:nowrap; }
+  .crit-label { flex:1; text-align:left; }
+  .crit-status { font-size:10px; font-weight:700; padding:1px 7px; border-radius:10px;
+    white-space:nowrap; flex-shrink:0; min-width:32px; text-align:center; }
+  .crit-pend { background:#f1f5f9; color:#94a3b8; }
+  .crit-ok   { background:#dcfce7; color:#16a34a; }
+  .crit-ng   { background:#fee2e2; color:#dc2626; }
+  .crit-src { font-size:9px; color:#94a3b8; white-space:nowrap; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -157,19 +163,19 @@
         <span id="criteria-arrow" onclick="toggleCriteria(event)" style="font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;background:#e2e8f0;">▲</span>
       </div>
       <div id="criteria-body" style="display:block;">
-        <div class="crit-row">① 풍속 <b>6m/s 이상</b> <span class="crit-src">기상청 WindProfiler</span></div>
-        <div class="crit-row">② 백두대간 보호구역 <b>미저촉</b> <span class="crit-src">Vworld WFS</span></div>
-        <div class="crit-row">③ 생태자연도 1등급 <b>미저촉</b> <span class="crit-src">Vworld WFS</span></div>
-        <div class="crit-row">④ 해발고도 <b>900m 이상</b> <span class="crit-src">Open Topo Data</span></div>
-        <div class="crit-row">⑤ 경사도 <b>25° 이하</b> <span class="crit-src">DEM 계산</span></div>
-        <div class="crit-row">⑥ 등고선·능선 <b>위치 확인</b> <span class="crit-src">Vworld WMS</span></div>
-        <div class="crit-row">⑦ 주거지 <b>2km 이상 이격</b> <span class="crit-src">건축물대장 API</span></div>
-        <div class="crit-row">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>750m+</b> <span class="crit-src">에너지공단</span></div>
-        <div style="padding:6px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;">
-          터빈기준: 4.5MW · Vestas V150 · 로터직경 150m
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">① 풍속 <b>6m/s 이상</b></span><span class="crit-src">기상청 WindProfiler</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">② 백두대간 보호구역 <b>미저촉</b></span><span class="crit-src">Vworld WFS</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">③ 생태자연도 1등급 <b>미저촉</b></span><span class="crit-src">Vworld WFS</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">④ 해발고도 <b>900m 이상</b></span><span class="crit-src">Open Topo Data</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑤ 경사도 <b>25° 이하</b></span><span class="crit-src">DEM 계산</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑥ 등고선·능선 <b>위치 확인</b></span><span class="crit-src">Vworld WMS</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑦ 주거지 <b>2km 이상 이격</b></span><span class="crit-src">건축물대장 API</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>750m+</b></span><span class="crit-src">에너지공단</span></div>
+        <div style="padding:6px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+          <span>4.5MW · Vestas V150 · 로터직경 150m</span>
+          <span id="crit-summary" style="font-weight:700;color:#94a3b8;">0/8</span>
         </div>
       </div>
-    </div>
     </div>
   </div>
 </div>
@@ -518,6 +524,29 @@ function toggleCriteria(e){
   const open=body.style.display==='none'||body.style.display==='';
   body.style.display=open?'block':'none';
   arrow.textContent=open?'▲':'▼';
+}
+
+function toggleCrit(row){
+  const st=row.querySelector('.crit-status');
+  if(st.classList.contains('crit-pend')||st.classList.contains('crit-ng')){
+    st.classList.remove('crit-pend','crit-ng');
+    st.classList.add('crit-ok');
+    st.textContent='가능';
+  } else {
+    st.classList.remove('crit-ok','crit-pend');
+    st.classList.add('crit-ng');
+    st.textContent='불가';
+  }
+  const rows=document.querySelectorAll('.crit-row');
+  const ok=[...rows].filter(r=>r.querySelector('.crit-status')?.classList.contains('crit-ok')).length;
+  const ng=[...rows].filter(r=>r.querySelector('.crit-status')?.classList.contains('crit-ng')).length;
+  const sum=document.getElementById('crit-summary');
+  if(sum){
+    if(ng>0){ sum.textContent=`❌ ${ng}개 불가`; sum.style.color='#dc2626'; }
+    else if(ok===8){ sum.textContent='✅ 8/8 통과'; sum.style.color='#16a34a'; }
+    else if(ok>0){ sum.textContent=`${ok}/8 확인`; sum.style.color='#d97706'; }
+    else{ sum.textContent='0/8'; sum.style.color='#94a3b8'; }
+  }
 }
 
 // 퀵메뉴 드래그
