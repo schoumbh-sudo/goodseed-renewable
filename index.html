@@ -376,7 +376,6 @@ let autoRidgeRunning = false;
 async function drawAutoRidge(){
   if(!autoRidgeOn || autoRidgeRunning) return;
   const zoom = map.getZoom();
-  // 줌 12 미만은 너무 넓어서 스킵
   if(zoom < 12){
     autoRidgeGroup.clearLayers();
     document.getElementById('ridge-wms-btn').textContent = '〰 능선 자동표시 ON (줌업 필요)';
@@ -388,11 +387,8 @@ async function drawAutoRidge(){
   const bounds = map.getBounds();
   const latMin = bounds.getSouth(), latMax = bounds.getNorth();
   const lonMin = bounds.getWest(), lonMax = bounds.getEast();
-
-  // 격자 간격 — 줌에 따라 조절
   const step = zoom >= 15 ? 0.001 : zoom >= 13 ? 0.002 : 0.004;
 
-  // 격자 생성
   const pts = [];
   for(let la=latMin; la<=latMax; la+=step)
     for(let lo=lonMin; lo<=lonMax; lo+=step)
@@ -404,20 +400,36 @@ async function drawAutoRidge(){
     return;
   }
 
-  // Open Topo Data 고도 조회
+  // ── Open Topo Data JSONP 방식으로 CORS 우회
+  // netlify 프록시로 CORS 우회 (/api/elevation/* → api.opentopodata.org)
+  async function getElevBatch(batch){
+    const locs = batch.map(p=>`${p.lat},${p.lon}`).join('|');
+    try{
+      const r = await fetch(`/api/elevation/srtm30m?locations=${locs}`,
+        {signal: AbortSignal.timeout(10000)});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      return (d.results||[]).map((x,i)=>({...batch[i], elev:Math.round(x.elevation||0)}));
+    }catch(e){
+      console.warn('고도 조회 실패:', e.message);
+      return batch.map(p=>({...p, elev:0}));
+    }
+  }
+
   const elevData = [];
   const BS = 100;
-  try{
-    for(let i=0;i<pts.length;i+=BS){
-      const b=pts.slice(i,i+BS);
-      const r=await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${b.map(p=>`${p.lat},${p.lon}`).join('|')}`);
-      const d=await r.json();
-      d.results.forEach((x,idx)=>elevData.push({...b[idx],elev:Math.round(x.elevation||0)}));
-      await new Promise(r=>setTimeout(r,1100));
-    }
-  }catch(e){
-    autoRidgeRunning=false;
-    document.getElementById('ridge-wms-btn').textContent='〰 능선 자동표시 ON (오류)';
+  for(let i=0; i<pts.length; i+=BS){
+    const b = pts.slice(i, i+BS);
+    const res = await getElevBatch(b);
+    elevData.push(...res);
+    document.getElementById('ridge-wms-btn').textContent =
+      `〰 능선 계산 중... (${Math.min(i+BS,pts.length)}/${pts.length})`;
+    await new Promise(r=>setTimeout(r, 1200));
+  }
+
+  if(elevData.filter(p=>p.elev>0).length === 0){
+    autoRidgeRunning = false;
+    document.getElementById('ridge-wms-btn').textContent = '〰 능선 자동표시 ON (고도 데이터 없음)';
     return;
   }
 
@@ -426,7 +438,7 @@ async function drawAutoRidge(){
   let ridgeCount = 0;
 
   elevData.forEach(p=>{
-    if(p.elev < 300) return; // 너무 낮은 곳 제외
+    if(p.elev < 100) return;
     const neighbors=[
       elevData.find(x=>Math.abs(x.lat-(p.lat+step))<step*0.6 && Math.abs(x.lon-p.lon)<step*0.6),
       elevData.find(x=>Math.abs(x.lat-(p.lat-step))<step*0.6 && Math.abs(x.lon-p.lon)<step*0.6),
@@ -434,10 +446,8 @@ async function drawAutoRidge(){
       elevData.find(x=>Math.abs(x.lat-p.lat)<step*0.6 && Math.abs(x.lon-(p.lon-step))<step*0.6),
     ].filter(Boolean);
     if(neighbors.length < 2) return;
-    // 2방향 이상에서 가장 높거나 같은 점 = 능선
     const higherEq = neighbors.filter(n=>p.elev >= n.elev).length;
     if(higherEq >= 3){
-      // 노란 원으로 능선점 표시
       L.circleMarker([p.lat,p.lon],{
         radius: zoom>=15?4:zoom>=13?3:2,
         fillColor:'#facc15', color:'#ca8a04',
@@ -447,9 +457,9 @@ async function drawAutoRidge(){
     }
   });
 
-  // 능선점들을 클러스터로 연결 (인접 능선점 연결선)
+  // 능선점 연결선
   const ridgePts = elevData.filter(p=>{
-    if(p.elev<300) return false;
+    if(p.elev<100) return false;
     const neighbors=[
       elevData.find(x=>Math.abs(x.lat-(p.lat+step))<step*0.6&&Math.abs(x.lon-p.lon)<step*0.6),
       elevData.find(x=>Math.abs(x.lat-(p.lat-step))<step*0.6&&Math.abs(x.lon-p.lon)<step*0.6),
@@ -459,9 +469,7 @@ async function drawAutoRidge(){
     return neighbors.length>=2 && neighbors.filter(n=>p.elev>=n.elev).length>=3;
   });
 
-  // 인접 능선점 연결 → 노란 점선 라인
   if(ridgePts.length >= 2){
-    // 위도 기준 정렬 후 인접점끼리 연결
     const sorted = ridgePts.slice().sort((a,b)=>a.lat-b.lat);
     const lineSegs = [];
     let seg = [sorted[0]];
@@ -472,7 +480,6 @@ async function drawAutoRidge(){
       else{ if(seg.length>=2) lineSegs.push(seg); seg=[cur]; }
     }
     if(seg.length>=2) lineSegs.push(seg);
-
     lineSegs.forEach(s=>{
       L.polyline(s.map(p=>[p.lat,p.lon]),{
         color:'#facc15', weight:2.5, dashArray:'10 6',
@@ -1009,7 +1016,7 @@ async function fetchElev(pts){
   for(let i=0;i<pts.length;i+=BS){
     const b=pts.slice(i,i+BS);
     try{
-      const r=await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${b.map(p=>`${p.lat},${p.lon}`).join('|')}`);
+      const r=await fetch(`/api/elevation/srtm30m?locations=${b.map(p=>`${p.lat},${p.lon}`).join('|')}`);
       const d=await r.json();
       d.results.forEach((x,idx)=>res.push({...b[idx],elev:Math.round(x.elevation||0)}));
     }catch(e){b.forEach(p=>res.push({...p,elev:0}));}
