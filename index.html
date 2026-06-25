@@ -134,8 +134,9 @@
       <button class="active" onclick="setLayer('satellite')">🛰 위성</button>
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
+      <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
       <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태자연도 OFF</button>
-      <button onclick="toggleRidgeWms()" id="ridge-wms-btn" style="color:#ca8a04;">〰 능선 레이어 OFF</button>
+      <button onclick="toggleRidgeWms()" id="ridge-wms-btn" style="color:#ca8a04;">〰 능선 자동표시 OFF</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
       <button onclick="toggleRidgeDraw()" id="ridge-btn" style="color:#ca8a04;">🖊 능선 직접그리기 OFF</button>
       <button onclick="clearAllRidges()" style="color:#dc2626;">🗑 능선 전체 삭제</button>
@@ -323,19 +324,195 @@ const LAYERS = {
   satellite: L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
   hybrid:    L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
   base:      L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
+  mix:       L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:22,maxNativeZoom:19}),
 };
 const HYBRID_LABEL = L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,{attribution:'',maxZoom:22,maxNativeZoom:19});
+// ── 위성 위에 등고선만 표시하는 커스텀 Canvas 타일 레이어
+// 흰색(밝은) 픽셀은 투명하게 처리 → 등고선(어두운 선)만 위성 위에 표시
+const ContourCanvasLayer = L.GridLayer.extend({
+  createTile(coords, done){
+    const tile = document.createElement('canvas');
+    const size = this.getTileSize();
+    tile.width = size.x;
+    tile.height = size.y;
+    const ctx = tile.getContext('2d');
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>{
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, size.x, size.y);
+      for(let i=0; i<d.data.length; i+=4){
+        const r=d.data[i], g=d.data[i+1], b=d.data[i+2];
+        const brightness = (r+g+b)/3;
+        // 밝은 픽셀(배경) 투명 처리, 어두운 선만 흰색으로 변환
+        if(brightness > 180){
+          d.data[i+3] = 0; // 투명
+        } else {
+          // 어두운 선 → 흰색으로
+          d.data[i]   = 255;
+          d.data[i+1] = 255;
+          d.data[i+2] = 255;
+          d.data[i+3] = Math.round((1-(brightness/180))*220);
+        }
+      }
+      ctx.putImageData(d, 0, 0);
+      done(null, tile);
+    };
+    img.onerror = ()=>done(null, tile);
+    img.src = `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/${coords.z}/${coords.y}/${coords.x}.png`;
+    return tile;
+  }
+});
+const BASE_OVERLAY = new ContourCanvasLayer({maxZoom:22, maxNativeZoom:19, zIndex:500});
 
 const map = L.map('map').setView([37.55, 128.20], 9);
 LAYERS.satellite.addTo(map);
 
+// ── 자동 능선 표시 레이어 그룹
+const autoRidgeGroup = L.layerGroup().addTo(map);
+let autoRidgeOn = false;
+let autoRidgeRunning = false;
+
+async function drawAutoRidge(){
+  if(!autoRidgeOn || autoRidgeRunning) return;
+  const zoom = map.getZoom();
+  // 줌 12 미만은 너무 넓어서 스킵
+  if(zoom < 12){
+    autoRidgeGroup.clearLayers();
+    document.getElementById('ridge-wms-btn').textContent = '〰 능선 자동표시 ON (줌업 필요)';
+    return;
+  }
+  autoRidgeRunning = true;
+  document.getElementById('ridge-wms-btn').textContent = '〰 능선 계산 중...';
+
+  const bounds = map.getBounds();
+  const latMin = bounds.getSouth(), latMax = bounds.getNorth();
+  const lonMin = bounds.getWest(), lonMax = bounds.getEast();
+
+  // 격자 간격 — 줌에 따라 조절
+  const step = zoom >= 15 ? 0.001 : zoom >= 13 ? 0.002 : 0.004;
+
+  // 격자 생성
+  const pts = [];
+  for(let la=latMin; la<=latMax; la+=step)
+    for(let lo=lonMin; lo<=lonMax; lo+=step)
+      pts.push({lat:parseFloat(la.toFixed(5)), lon:parseFloat(lo.toFixed(5))});
+
+  if(pts.length > 500){
+    autoRidgeRunning = false;
+    document.getElementById('ridge-wms-btn').textContent = '〰 능선 자동표시 ON (더 확대해주세요)';
+    return;
+  }
+
+  // Open Topo Data 고도 조회
+  const elevData = [];
+  const BS = 100;
+  try{
+    for(let i=0;i<pts.length;i+=BS){
+      const b=pts.slice(i,i+BS);
+      const r=await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${b.map(p=>`${p.lat},${p.lon}`).join('|')}`);
+      const d=await r.json();
+      d.results.forEach((x,idx)=>elevData.push({...b[idx],elev:Math.round(x.elevation||0)}));
+      await new Promise(r=>setTimeout(r,1100));
+    }
+  }catch(e){
+    autoRidgeRunning=false;
+    document.getElementById('ridge-wms-btn').textContent='〰 능선 자동표시 ON (오류)';
+    return;
+  }
+
+  // 능선 감지: 4방향 인접보다 높은 점
+  autoRidgeGroup.clearLayers();
+  let ridgeCount = 0;
+
+  elevData.forEach(p=>{
+    if(p.elev < 300) return; // 너무 낮은 곳 제외
+    const neighbors=[
+      elevData.find(x=>Math.abs(x.lat-(p.lat+step))<step*0.6 && Math.abs(x.lon-p.lon)<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-(p.lat-step))<step*0.6 && Math.abs(x.lon-p.lon)<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<step*0.6 && Math.abs(x.lon-(p.lon+step))<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<step*0.6 && Math.abs(x.lon-(p.lon-step))<step*0.6),
+    ].filter(Boolean);
+    if(neighbors.length < 2) return;
+    // 2방향 이상에서 가장 높거나 같은 점 = 능선
+    const higherEq = neighbors.filter(n=>p.elev >= n.elev).length;
+    if(higherEq >= 3){
+      // 노란 원으로 능선점 표시
+      L.circleMarker([p.lat,p.lon],{
+        radius: zoom>=15?4:zoom>=13?3:2,
+        fillColor:'#facc15', color:'#ca8a04',
+        weight:1, fillOpacity:0.85, zIndexOffset:400
+      }).bindTooltip(`능선 ${p.elev}m`,{permanent:false}).addTo(autoRidgeGroup);
+      ridgeCount++;
+    }
+  });
+
+  // 능선점들을 클러스터로 연결 (인접 능선점 연결선)
+  const ridgePts = elevData.filter(p=>{
+    if(p.elev<300) return false;
+    const neighbors=[
+      elevData.find(x=>Math.abs(x.lat-(p.lat+step))<step*0.6&&Math.abs(x.lon-p.lon)<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-(p.lat-step))<step*0.6&&Math.abs(x.lon-p.lon)<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<step*0.6&&Math.abs(x.lon-(p.lon+step))<step*0.6),
+      elevData.find(x=>Math.abs(x.lat-p.lat)<step*0.6&&Math.abs(x.lon-(p.lon-step))<step*0.6),
+    ].filter(Boolean);
+    return neighbors.length>=2 && neighbors.filter(n=>p.elev>=n.elev).length>=3;
+  });
+
+  // 인접 능선점 연결 → 노란 점선 라인
+  if(ridgePts.length >= 2){
+    // 위도 기준 정렬 후 인접점끼리 연결
+    const sorted = ridgePts.slice().sort((a,b)=>a.lat-b.lat);
+    const lineSegs = [];
+    let seg = [sorted[0]];
+    for(let i=1;i<sorted.length;i++){
+      const prev=sorted[i-1], cur=sorted[i];
+      const d=Math.sqrt((cur.lat-prev.lat)**2+(cur.lon-prev.lon)**2);
+      if(d < step*2.5) seg.push(cur);
+      else{ if(seg.length>=2) lineSegs.push(seg); seg=[cur]; }
+    }
+    if(seg.length>=2) lineSegs.push(seg);
+
+    lineSegs.forEach(s=>{
+      L.polyline(s.map(p=>[p.lat,p.lon]),{
+        color:'#facc15', weight:2.5, dashArray:'10 6',
+        opacity:0.9, zIndexOffset:500
+      }).addTo(autoRidgeGroup);
+    });
+  }
+
+  autoRidgeRunning = false;
+  document.getElementById('ridge-wms-btn').textContent =
+    `〰 능선 자동표시 ON (${ridgeCount}점)`;
+}
+
+function toggleRidgeWms(){
+  ridgeWmsOn = !ridgeWmsOn;
+  autoRidgeOn = ridgeWmsOn;
+  const btn = document.getElementById('ridge-wms-btn');
+  if(ridgeWmsOn){
+    btn.textContent='〰 능선 자동표시 ON';
+    btn.style.color='#dc2626';
+    drawAutoRidge();
+  } else {
+    btn.textContent='〰 능선 자동표시 OFF';
+    btn.style.color='#ca8a04';
+    autoRidgeGroup.clearLayers();
+  }
+}
+
+// 지도 이동/줌 변경 시 능선 재계산
+map.on('moveend zoomend', ()=>{ if(autoRidgeOn) drawAutoRidge(); });
+
 function setLayer(n) {
   Object.values(LAYERS).forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
-  if(map.hasLayer(HYBRID_LABEL))map.removeLayer(HYBRID_LABEL);
+  if(map.hasLayer(HYBRID_LABEL)) map.removeLayer(HYBRID_LABEL);
+  if(map.hasLayer(BASE_OVERLAY)) map.removeLayer(BASE_OVERLAY);
   LAYERS[n].addTo(map);
-  if(n==='hybrid')HYBRID_LABEL.addTo(map);
+  if(n==='hybrid') HYBRID_LABEL.addTo(map);
+  if(n==='mix'){ BASE_OVERLAY.addTo(map); }
   document.querySelectorAll('#layer-ctrl button').forEach((b,i)=>{
-    b.classList.toggle('active',['satellite','hybrid','base'][i]===n);
+    b.classList.toggle('active',['satellite','hybrid','base','mix'][i]===n);
   });
 }
 
@@ -673,14 +850,6 @@ async function fetchRidgeWFS(lat, lon, radiusKm){
     console.log('WFS 능선 조회 오류:', e.message);
     return 0;
   }
-}
-
-function toggleRidgeWms(){
-  ridgeWmsOn=!ridgeWmsOn;
-  ridgeWmsOn?ridgeWmsLayer.addTo(map):map.removeLayer(ridgeWmsLayer);
-  const el=document.getElementById('ridge-wms-btn');
-  if(el){el.textContent=`〰 능선 레이어 ${ridgeWmsOn?'ON':'OFF'}`;
-    el.style.color=ridgeWmsOn?'#dc2626':'#ca8a04';}
 }
 
 function toggleContour(){
