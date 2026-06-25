@@ -102,7 +102,7 @@
         <div class="poi-dot" style="background:#f59e0b;border:2px solid #d97706;" id="nw-dot-2"></div>
         <div>
           <div class="poi-name" style="color:#d97706;font-size:11px;" id="nw-title-2">2번 건천리 — 8개 항목 검토 중...</div>
-          <div class="poi-sub" id="nw-sub-2">고양산(1,150m) 능선 분석 중</div>
+          <div class="poi-sub" id="nw-sub-2">고양산(1,150m) 규제·고도 분석 중</div>
         </div>
       </div>
       <div class="poi-item" style="cursor:default;">
@@ -136,9 +136,9 @@
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
       <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태자연도 OFF</button>
-      <button onclick="toggleRidgeWms()" id="ridge-wms-btn" style="color:#ca8a04;">〰 능선 자동표시 OFF</button>
+      <button onclick="alert('실제 능선 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.')" id="ridge-wms-btn" style="color:#94a3b8;">〰 능선 자동분석 미연결</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
-      <button onclick="toggleRidgeDraw()" id="ridge-btn" style="color:#ca8a04;">🖊 능선 직접그리기 OFF</button>
+      <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
       <button onclick="clearAllRidges()" style="color:#dc2626;">🗑 능선 전체 삭제</button>
     </div>
 
@@ -156,7 +156,7 @@
       <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;"></div><span>풍력발전기 (실제)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 200m 기준</span></div>
-      <div class="leg-row"><div class="leg-dot" style="background:#facc15;border:2px solid #111827;"></div><span>능선 육안확인 지점</span></div>
+      <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span></div>
     </div>
     <div id="criteria-panel" style="position:absolute;bottom:60px;left:295px;z-index:1000;
       background:#fff;border-radius:8px;border:1px solid #e2e8f0;
@@ -1463,38 +1463,9 @@ async function startAnalysis(){
   setStatus('능선 자동데이터 미확보 — 등고선 지도에서 육안 검토 후 표시해주세요',95);
   const passed=[];
 
-  if(passed.length>0){
-    passed.forEach((p,i)=>{
-      const m=L.circleMarker([p.lat,p.lon],{
-        radius:7,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:0.92,zIndexOffset:500
-      }).addTo(map).bindPopup(
-        `<b>🔴 신규터빈 후보 T${i+1}</b><br>`+
-        `${p.lat}, ${p.lon}<br>`+
-        `해발 ${p.elev}m · 경사 ${p.slp?.toFixed(1)}°<br>`+
-        `<small>능선 데이터 확인 후 표시 필요</small>`
-      );
-      const lb=L.marker([p.lat,p.lon],{
-        icon:L.divIcon({
-          html:`<div style="background:rgba(220,20,20,0.9);color:#fff;border-radius:10px;
-                padding:1px 5px;font-size:9px;font-weight:700;border:1px solid #fff;
-                margin-top:12px;">T${i+1}</div>`,
-          iconSize:[26,16],iconAnchor:[13,-2],className:''
-        }),zIndexOffset:501
-      }).addTo(map);
-      clickResultLayers.push(m,lb);
-    });
-    setStatus(`✅ ${passed.length}기 후보 표시 완료`,100);
-  // DEM 기반 능선 자동 감지
-  await detectRidgeFromDEM(elevData, clickLat, clickLon);
-  // WFS 능선 자동 조회 (노란 점선)
-  setStatus('🗺 능선 데이터 조회 중...', 98);
-  const ridgeCnt = await fetchRidgeWFS(clickLat, clickLon, clickRadius);
-  if(ridgeCnt>0) setStatus(`✅ 능선 ${ridgeCnt}개 표시 완료`, 100);
-  else setStatus(`✅ 분석 완료 (능선 WFS 데이터 없음 — 능선 레이어 버튼으로 확인)`, 100);
-  } else {
-    setStatus('❌ 터빈 후보 자동표시 없음 — 임의 배치 금지, 능선 육안확인 필요',100);
-  await detectRidgeFromDEM(elevData, clickLat, clickLon);
-  }
+  // 능선 데이터가 실제로 연결되지 않았으므로 터빈 후보/능선 후보를 지도에 자동 표시하지 않음.
+  // 등고선 지도는 참고용 배경이며, 능선 자동 판정 데이터가 아니므로 결과로 쓰지 않음.
+  setStatus('✅ 분석 완료 — 능선 실제 데이터 미연결, 임의 능선·터빈 후보 표시 안 함',100);
 
   btn.disabled=false; btn.textContent='▶ 분석 시작';
 }
@@ -1714,6 +1685,179 @@ document.addEventListener('DOMContentLoaded',()=>{
   clearBtn.onclick=clearAllRidges;
   ab.appendChild(clearBtn);
 });
+
+// ── 안전장치: 실제 능선 데이터 미연결 상태에서는 능선/터빈 후보를 자동 또는 수동으로 표시하지 않음
+(function(){
+  if(typeof window !== 'undefined'){
+    window.toggleRidgeWms = function(){
+      alert('실제 능선 벡터/DEM 분석 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.');
+    };
+    window.drawAutoRidge = async function(){ return; };
+    window.fetchRidgeWFS = async function(){ return 0; };
+    window.detectRidgeFromDEM = async function(){ return; };
+    window.toggleRidgeDraw = function(){
+      alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.');
+    };
+  }
+})();
+
 </script>
+
+<script>
+// ═════════════════════════════════════════════════════════════
+// Wind GIS HTML Patch: 실제 서버 능선 추출 + 수동 능선 그리기 복구
+// 원칙: 브라우저에서 DEM 점을 임의 연결하지 않음. /api/ridge 결과만 능선으로 표시.
+// ═════════════════════════════════════════════════════════════
+(function(){
+  let serverRidgeLayers = [];
+
+  function setRidgeCriterion(ok, text){
+    const row = document.querySelectorAll('.crit-row')[5];
+    const st = row?.querySelector('.crit-status');
+    if(!st) return;
+    st.className = 'crit-status ' + (ok ? 'crit-ok' : 'crit-ng');
+    st.textContent = text || (ok ? '확인' : '자료필요');
+    const statuses=[...document.querySelectorAll('.crit-status')];
+    const ok_cnt=statuses.filter(s=>s.classList.contains('crit-ok')).length;
+    const ng_cnt=statuses.filter(s=>s.classList.contains('crit-ng')).length;
+    const sum=document.getElementById('crit-summary');
+    if(sum){
+      if(ng_cnt>0){sum.textContent=`❌ ${ng_cnt}개 불가`;sum.style.color='#dc2626';}
+      else if(ok_cnt===8){sum.textContent='✅ 8/8 통과';sum.style.color='#16a34a';}
+      else{sum.textContent=`${ok_cnt}/8 확인`;sum.style.color='#d97706';}
+    }
+  }
+
+  function normalizeGeoJSON(data){
+    if(!data) return null;
+    if(data.type === 'FeatureCollection' || data.type === 'Feature') return data;
+    if(data.geojson) return normalizeGeoJSON(data.geojson);
+    if(data.ridge) return normalizeGeoJSON(data.ridge);
+    if(data.ridges) return normalizeGeoJSON(data.ridges);
+    return null;
+  }
+
+  function hasGeoJSONFeatures(gj){
+    if(!gj) return false;
+    if(gj.type === 'FeatureCollection') return Array.isArray(gj.features) && gj.features.length > 0;
+    if(gj.type === 'Feature') return !!gj.geometry;
+    return false;
+  }
+
+  function clearServerRidges(){
+    serverRidgeLayers.forEach(l=>map.removeLayer(l));
+    serverRidgeLayers=[];
+  }
+
+  window.requestRidgeFromServer = async function(){
+    if(!window.clickLat && typeof clickLat !== 'undefined') window.clickLat = clickLat;
+    if(!window.clickLon && typeof clickLon !== 'undefined') window.clickLon = clickLon;
+
+    const lat = (typeof clickLat !== 'undefined') ? clickLat : window.clickLat;
+    const lon = (typeof clickLon !== 'undefined') ? clickLon : window.clickLon;
+    const radius = (typeof clickRadius !== 'undefined') ? clickRadius : 2;
+
+    if(!lat || !lon){
+      alert('먼저 지도에서 분석할 위치를 클릭해줘.');
+      return;
+    }
+
+    clearServerRidges();
+    if(typeof setStatus === 'function') setStatus('⛰️ 서버에 실제 DEM 기반 능선 추출 요청 중...', 72);
+    setRidgeCriterion(false, '조회중');
+
+    const url = `/api/ridge?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`;
+    try{
+      const res = await fetch(url, { headers:{'Accept':'application/json'} });
+      if(!res.ok) throw new Error(`서버 응답 오류 HTTP ${res.status}`);
+      const data = await res.json();
+      const gj = normalizeGeoJSON(data);
+
+      if(!hasGeoJSONFeatures(gj)){
+        if(typeof setStatus === 'function') setStatus('⚠️ 서버 응답은 받았지만 능선 GeoJSON이 없음 — 지도 표시 안 함', 100);
+        setRidgeCriterion(false, '자료없음');
+        return;
+      }
+
+      // 검은 외곽선 먼저, 노란 실제 능선선 나중에 표시
+      const outline = L.geoJSON(gj, {
+        style: () => ({ color:'#111827', weight:8, opacity:0.95, lineCap:'round', lineJoin:'round' }),
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:8,color:'#111827',weight:3,fillColor:'#facc15',fillOpacity:1})
+      }).addTo(map);
+      const ridge = L.geoJSON(gj, {
+        style: () => ({ color:'#facc15', weight:4, opacity:1, lineCap:'round', lineJoin:'round' }),
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:6,color:'#111827',weight:2,fillColor:'#facc15',fillOpacity:1}),
+        onEachFeature: (feature, layer) => {
+          const src = data.source || feature.properties?.source || 'DEM 서버 분석';
+          layer.bindTooltip(`실제 능선 · ${src}`, {permanent:false});
+        }
+      }).addTo(map);
+      serverRidgeLayers.push(outline, ridge);
+      try { map.fitBounds(ridge.getBounds(), {padding:[40,40]}); } catch(e) {}
+
+      if(typeof setStatus === 'function') setStatus('✅ 실제 DEM 기반 능선 표시 완료', 100);
+      setRidgeCriterion(true, '서버확인');
+    }catch(err){
+      console.warn('능선 서버 추출 실패:', err);
+      if(typeof setStatus === 'function') setStatus('❌ 능선 추출 서버 미연결 또는 오류 — 임의 표시 안 함', 100);
+      setRidgeCriterion(false, '서버필요');
+    }
+  };
+
+  // 자동 DEM 추정/임의 연결 기능은 완전 차단
+  window.drawAutoRidge = async function(){
+    alert('브라우저 DEM 임의 능선 자동표시는 사용하지 않아. 실제 /api/ridge 서버 결과만 표시해.');
+  };
+  window.fetchRidgeWFS = async function(){ return 0; };
+  window.detectRidgeFromDEM = async function(){ return; };
+  window.toggleRidgeWms = window.requestRidgeFromServer;
+
+  // 수동 능선 그리기 복구: 사용자가 직접 표시하는 보조 기능. 자동 분석 결과로 취급하지 않음.
+  window.toggleRidgeDraw = function(){
+    ridgeDrawMode = !ridgeDrawMode;
+    const btn = document.getElementById('ridge-btn');
+    if(ridgeDrawMode){
+      if(btn){btn.textContent='🖊 능선 직접그리기 ON'; btn.style.color='#dc2626'; btn.style.background='#fef9c3';}
+      map.getContainer().style.cursor='crosshair';
+      if(typeof showRidgeGuide === 'function') showRidgeGuide(true);
+    }else{
+      if(btn){btn.textContent='🖊 능선 직접그리기 OFF'; btn.style.color='#ca8a04'; btn.style.background='';}
+      map.getContainer().style.cursor='';
+      if(typeof showRidgeGuide === 'function') showRidgeGuide(false);
+      if(typeof finalizeRidge === 'function' && ridgePoints.length>=2) finalizeRidge();
+    }
+  };
+
+  // 기존 버튼 문구/동작 교체
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const apiBtn=document.getElementById('ridge-wms-btn');
+    if(apiBtn){
+      apiBtn.textContent='⛰️ 능선 서버추출';
+      apiBtn.style.color='#ca8a04';
+      apiBtn.onclick=window.requestRidgeFromServer;
+      apiBtn.title='/api/ridge?lat=...&lon=...&radius=... 결과가 있을 때만 능선을 표시';
+    }
+    const drawBtn=document.getElementById('ridge-btn');
+    if(drawBtn){
+      drawBtn.textContent='🖊 능선 직접그리기 OFF';
+      drawBtn.style.color='#ca8a04';
+      drawBtn.onclick=window.toggleRidgeDraw;
+      drawBtn.title='사용자가 등고선을 보고 직접 찍은 보조 표시. 자동 분석 결과 아님';
+    }
+
+    const panel=document.querySelector('#ridge-panel div[style*="padding:10px 14px"]');
+    if(panel && !document.getElementById('server-ridge-help')){
+      const box=document.createElement('div');
+      box.id='server-ridge-help';
+      box.style.cssText='font-size:10px;color:#475569;line-height:1.55;background:#fffbeb;border:1px solid #fde68a;padding:7px 8px;border-radius:6px;margin-top:8px;';
+      box.innerHTML='서버추출은 <b>/api/ridge</b>가 실제 DEM 기반 GeoJSON을 반환할 때만 노란 능선을 표시함.<br><b style="color:#dc2626;">서버 결과가 없으면 아무 능선도 그리지 않음.</b>';
+      panel.appendChild(box);
+    }
+  });
+
+  window.clearServerRidges = clearServerRidges;
+})();
+</script>
+
 </body>
 </html>
