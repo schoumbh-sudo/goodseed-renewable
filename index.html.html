@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>강원도 풍력발전단지 실제 위치 & 태양광 사업부지</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { background: #1e293b; color: #fff; padding: 12px 20px;
+           display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  header h1 { font-size: 14px; font-weight: 500; }
+  header span { font-size: 11px; color: rgba(255,255,255,0.4); }
+  #layout { display: flex; flex: 1; overflow: hidden; }
+  #sidebar { width: 285px; flex-shrink: 0; background: #fff;
+             border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
+  .sec-title { padding: 9px 14px 5px; font-size: 10px; font-weight: 600; color: #94a3b8;
+               text-transform: uppercase; letter-spacing: 0.6px;
+               border-bottom: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0; }
+  .poi-item { padding: 8px 14px; cursor: pointer; border-left: 3px solid transparent;
+              display: flex; align-items: flex-start; gap: 8px; transition: background 0.1s; }
+  .poi-item:hover { background: #f8fafc; }
+  .poi-item.active { background: #f0f9ff; border-left-color: #0ea5e9; }
+  .poi-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .dot-solar { background: #f59e0b; border: 2px solid #d97706; }
+  .dot-solar2 { background: #f97316; border: 2px solid #ea580c; }
+  .dot-wind  { background: #3b82f6; border: 2px solid #1d4ed8; }
+  .poi-name { font-size: 12px; font-weight: 500; color: #1e293b; line-height: 1.4; }
+  .poi-sub  { font-size: 10px; color: #64748b; margin-top: 1px; }
+  #status-bar { padding: 8px 14px; font-size: 11px; border-bottom: 1px solid #f1f5f9; flex-shrink: 0; }
+  .s-loading { color: #92400e; background: #fffbeb; }
+  .s-done    { color: #065f46; background: #ecfdf5; }
+  .s-error   { color: #991b1b; background: #fef2f2; }
+  #wind-list { flex: 1; overflow-y: auto; }
+  #map-wrap  { flex: 1; position: relative; }
+  #map       { width: 100%; height: 100%; }
+  #layer-ctrl { position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: #fff; border-radius: 8px; border: 1px solid #e2e8f0;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+  #layer-ctrl button { padding: 7px 14px; font-size: 11px; font-weight: 500;
+    background: transparent; border: none; cursor: pointer; color: #475569;
+    text-align: left; white-space: nowrap; border-bottom: 1px solid #f1f5f9; }
+  #layer-ctrl button:last-child { border-bottom: none; }
+  #layer-ctrl button.active { background: #f0f9ff; color: #0369a1; }
+  #info-panel { position: absolute; bottom: 20px; left: 16px; width: 290px;
+    background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+    padding: 13px 15px; display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.13); z-index: 900; }
+  #info-panel .ip-type { font-size: 10px; font-weight: 600; color: #64748b; margin-bottom: 3px; }
+  #info-panel .ip-name { font-size: 13px; font-weight: 500; color: #0f172a; margin-bottom: 7px; }
+  #info-panel .ip-note { font-size: 11px; color: #475569; line-height: 1.75;
+    border-top: 1px solid #f1f5f9; padding-top: 7px; }
+  #info-panel .ip-close { position: absolute; top: 9px; right: 12px; font-size: 17px;
+    cursor: pointer; color: #94a3b8; background: none; border: none; }
+  #legend { position: absolute; bottom: 20px; right: 10px; z-index: 900;
+    background: #fff; border-radius: 8px; border: 1px solid #e2e8f0;
+    padding: 10px 13px; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  #legend .lt { font-size: 10px; font-weight: 600; color: #94a3b8; margin-bottom: 7px; }
+  .leg-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .leg-row:last-child { margin-bottom: 0; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .leg-sq  { width: 12px; height: 8px; border-radius: 1px; flex-shrink: 0; }
+  .crit-row { padding:5px 12px; font-size:11px; color:#334155; border-bottom:1px solid #f8fafc;
+    display:flex; align-items:center; justify-content:space-between; }
+  .crit-row:last-of-type { border-bottom:none; }
+  .crit-row::before { content:'✅'; margin-right:6px; font-size:10px; }
+  .crit-src { font-size:9px; color:#94a3b8; margin-left:6px; white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>강원도 풍력발전단지 실제 위치 &amp; 1번 대기리 태양광 사업부지</h1>
+  <span>에너지공단 공공데이터 (2022) + Vworld 위성</span>
+</header>
+<div id="layout">
+  <div id="sidebar">
+    <div class="sec-title">☀️ 태양광 사업부지 (3개)</div>
+    <div id="solar-list"></div>
+    <div class="sec-title">🔴 신규 풍력터빈 위치도</div>
+    <div id="new-wind-list">
+      <div class="poi-item" style="cursor:default;">
+        <div class="poi-dot" style="background:#94a3b8;border:2px solid #64748b;"></div>
+        <div>
+          <div class="poi-name" style="color:#dc2626;font-size:11px;">1번 대기리 — 신규 설치 불가</div>
+          <div class="poi-sub">② 백두대간 준령 저촉</div>
+          <div class="poi-sub">③ 생태자연도 1등급 저촉</div>
+          <div class="poi-sub">⑦ 주거지 180가구 2km 이격 불가</div>
+          <div class="poi-sub">⑧ 기존 9개 단지 밀집 300m 이격 불가</div>
+        </div>
+      </div>
+      <div class="poi-item" style="cursor:default;" id="nw-item-2">
+        <div class="poi-dot" style="background:#f59e0b;border:2px solid #d97706;" id="nw-dot-2"></div>
+        <div>
+          <div class="poi-name" style="color:#d97706;font-size:11px;" id="nw-title-2">2번 건천리 — 8개 항목 검토 중...</div>
+          <div class="poi-sub" id="nw-sub-2">고양산(1,150m) 능선 분석 중</div>
+        </div>
+      </div>
+      <div class="poi-item" style="cursor:default;">
+        <div class="poi-dot" style="background:#94a3b8;border:2px solid #64748b;"></div>
+        <div>
+          <div class="poi-name" style="color:#64748b;font-size:11px;">3번 삼척 하장면 — 검토 예정</div>
+          <div class="poi-sub">8개 항목 검토 후 표시</div>
+        </div>
+      </div>
+    </div>
+    <div class="sec-title">💨 풍력발전단지 실제 위치</div>
+    <div id="status-bar" class="s-loading">⏳ 에너지공단 API 호출 중...</div>
+    <div id="wind-list"></div>
+  </div>
+  <div id="map-wrap">
+    <div id="search-bar" style="position:absolute;top:10px;left:295px;z-index:1000;display:flex;gap:6px;">
+      <input id="search-input" type="text" placeholder="주소 또는 지명 검색..."
+        style="width:240px;padding:7px 12px;font-size:12px;border-radius:6px;
+               border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,0.1);outline:none;"
+        onkeydown="if(event.key==='Enter')searchAddr()"/>
+      <button onclick="searchAddr()"
+        style="padding:7px 14px;font-size:11px;font-weight:600;background:#1e293b;color:#fff;
+               border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        검색
+      </button>
+    </div>
+    <div id="map"></div>
+    <div id="layer-ctrl">
+      <button class="active" onclick="setLayer('satellite')">🛰 위성</button>
+      <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
+      <button onclick="setLayer('base')">🗺 일반지도</button>
+      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태자연도 OFF</button>
+    </div>
+
+    <div id="info-panel">
+      <button class="ip-close" onclick="this.parentElement.style.display='none'">×</button>
+      <div class="ip-type" id="ip-type"></div>
+      <div class="ip-name" id="ip-name"></div>
+      <div class="ip-note" id="ip-note"></div>
+    </div>
+    <div id="legend">
+      <div class="lt">범례</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;border:2px solid #d97706;width:14px;height:14px;"></div><span>대기리 1차 부지 (150MW)</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#f97316;border:2px solid #ea580c;width:11px;height:11px;"></div><span>대기리 2차 부지 (150MW)</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;border:2px solid #d97706;"></div><span>태양광 사업부지 마커</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;"></div><span>풍력발전기 (실제)</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 2km 기준</span></div>
+    </div>
+    <div id="criteria-panel" style="position:absolute;bottom:60px;left:295px;z-index:1000;
+      background:#fff;border-radius:8px;border:1px solid #e2e8f0;
+      box-shadow:0 2px 8px rgba(0,0,0,0.12);overflow:hidden;min-width:260px;
+      cursor:move;user-select:none;">
+      <div id="criteria-header" style="padding:8px 14px;font-size:11px;font-weight:600;
+        color:#1e293b;background:#f8fafc;border-bottom:1px solid #f1f5f9;
+        display:flex;align-items:center;justify-content:space-between;">
+        <span>⚡ 풍력터빈 설치기준 (8개 항목)</span>
+        <span id="criteria-arrow" onclick="toggleCriteria(event)" style="font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;background:#e2e8f0;">▲</span>
+      </div>
+      <div id="criteria-body" style="display:block;">
+        <div class="crit-row">① 풍속 <b>6m/s 이상</b> <span class="crit-src">기상청 WindProfiler</span></div>
+        <div class="crit-row">② 백두대간 보호구역 <b>미저촉</b> <span class="crit-src">Vworld WFS</span></div>
+        <div class="crit-row">③ 생태자연도 1등급 <b>미저촉</b> <span class="crit-src">Vworld WFS</span></div>
+        <div class="crit-row">④ 해발고도 <b>900m 이상</b> <span class="crit-src">Open Topo Data</span></div>
+        <div class="crit-row">⑤ 경사도 <b>25° 이하</b> <span class="crit-src">DEM 계산</span></div>
+        <div class="crit-row">⑥ 등고선·능선 <b>위치 확인</b> <span class="crit-src">Vworld WMS</span></div>
+        <div class="crit-row">⑦ 주거지 <b>2km 이상 이격</b> <span class="crit-src">건축물대장 API</span></div>
+        <div class="crit-row">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>750m+</b> <span class="crit-src">에너지공단</span></div>
+        <div style="padding:6px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;">
+          터빈기준: 4.5MW · Vestas V150 · 로터직경 150m
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const VWORLD_KEY = 'AACB7420-24B8-351C-A631-53F535081E93';
+const API_KEY    = 'b02836e49fd4425e579a19da6bb135f7a1aa1a03f9fa9f0bd5c37a7bb4b98a62';
+const API_BASE   = 'https://api.odcloud.kr/api/15085304/v1/uddi:1e2ea3c9-17a1-4921-81ac-ed50c5ba3093';
+
+// ── 태양광 부지 데이터
+const SOLAR = [
+  { name:'1번 강릉 대기리 300MW', lat:37.6190, lon:128.7389,
+    note:'강릉시 왕산면 대기리 일원 · 약 90만평\n태양광 300MW (1차 : 150MW, 2차 : 150MW)\n횡계S/S 154kV 2파이 분기 · 8km\n개발기간 2026~2031년' },
+  { name:'2번 정선 건천리 160MW', lat:37.3230, lon:128.8308,
+    note:'정선군 화암면 건천리 일원 · 약 60만평\n발전사업허가 취득 (43MW+7.9MW)\n정선S/S 1Bay 154kV · 건천S/S 9.2km' },
+  { name:'3번 삼척 하장면 80MW',  lat:37.2852, lon:128.8768,
+    note:'삼척시 하장면 역둔리·용연리·대전리 · 약 28만평\n한국남부발전 지분참여 예정\n건천S/S 22.9kV 종속 연계' },
+];
+
+// ── 1차 부지 정밀 폴리곤 (첨부 이미지 랜드마크 기준 변환)
+const POLY_1CHA = [
+  [37.51881,128.85921],[37.52008,128.86346],[37.52025,128.86831],[37.51991,128.87316],
+  [37.51923,128.8774],[37.51838,128.88226],[37.51754,128.88711],[37.51627,128.89256],
+  [37.51542,128.89802],[37.51415,128.90287],[37.51331,128.90772],[37.51288,128.91257],
+  [37.51204,128.91621],[37.51077,128.91864],[37.50908,128.91985],[37.50738,128.91924],
+  [37.50569,128.91743],[37.50442,128.915],[37.50358,128.91257],[37.50315,128.90954],
+  [37.50332,128.90651],[37.504,128.90348],[37.50485,128.90105],[37.50315,128.89984],
+  [37.50104,128.90045],[37.49892,128.90105],[37.49681,128.89984],[37.49512,128.89741],
+  [37.49385,128.89438],[37.493,128.89135],[37.49258,128.88808],[37.49283,128.88468],
+  [37.49131,128.88286],[37.48919,128.88226],[37.48708,128.88165],[37.48496,128.8808],
+  [37.48327,128.87922],[37.48217,128.87716],[37.48158,128.87474],[37.48175,128.87231],
+  [37.48259,128.87013],[37.48386,128.86831],[37.48538,128.8671],[37.48708,128.86649],
+  [37.48877,128.86673],[37.49046,128.86746],[37.49173,128.86867],[37.49215,128.86588],
+  [37.49232,128.86285],[37.49215,128.85982],[37.49173,128.85679],[37.49131,128.85376],
+  [37.49063,128.85072],[37.49029,128.84769],[37.49029,128.84466],[37.49088,128.84199],
+  [37.49198,128.83981],[37.49342,128.83835],[37.49512,128.83799],[37.49681,128.3386],
+  [37.49825,128.84005],[37.49935,128.84199],[37.50045,128.83981],[37.50188,128.83799],
+  [37.50358,128.83678],[37.50527,128.83641],[37.50696,128.83714],[37.50823,128.8386],
+  [37.50925,128.84078],[37.50992,128.84345],[37.51035,128.84648],[37.51035,128.84951],
+  [37.51162,128.85194],[37.51331,128.85376],[37.51517,128.85497],[37.51712,128.85557],
+  [37.51838,128.85679],[37.51881,128.858],
+];
+
+// ── 2차 부지 정밀 폴리곤
+const POLY_2CHA = [
+  [37.54309,128.83399],[37.54377,128.83617],[37.54394,128.8386],[37.5436,128.84078],
+  [37.54275,128.84248],[37.5414,128.84369],[37.53971,128.84405],[37.53768,128.84369],
+  [37.53548,128.84284],[37.53345,128.84163],[37.53125,128.84041],[37.52896,128.83957],
+  [37.52685,128.8392],[37.52498,128.8392],[37.52329,128.83981],[37.52194,128.84078],
+  [37.52092,128.84199],[37.52025,128.84345],[37.52008,128.8449],[37.5205,128.84624],
+  [37.5216,128.84709],[37.52304,128.84733],[37.52473,128.84684],[37.52642,128.84587],
+  [37.52837,128.8449],[37.5304,128.84405],[37.5326,128.84345],[37.53488,128.8432],
+  [37.53717,128.84345],[37.53937,128.84405],[37.5414,128.84405],[37.54292,128.8432],
+  [37.54377,128.84163],[37.54394,128.83957],[37.5436,128.83738],[37.54292,128.83556],
+  [37.54208,128.83399],[37.54309,128.83399],
+];
+
+// ── Vworld 지도
+const LAYERS = {
+  satellite: L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:19}),
+  hybrid:    L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,{attribution:'© Vworld',maxZoom:19}),
+  base:      L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`,{attribution:'© Vworld',maxZoom:19}),
+};
+const HYBRID_LABEL = L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Hybrid/{z}/{y}/{x}.png`,{attribution:'',maxZoom:19});
+
+const map = L.map('map').setView([37.55, 128.20], 9);
+LAYERS.satellite.addTo(map);
+
+function setLayer(n) {
+  Object.values(LAYERS).forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
+  if(map.hasLayer(HYBRID_LABEL))map.removeLayer(HYBRID_LABEL);
+  LAYERS[n].addTo(map);
+  if(n==='hybrid')HYBRID_LABEL.addTo(map);
+  document.querySelectorAll('#layer-ctrl button').forEach((b,i)=>{
+    b.classList.toggle('active',['satellite','hybrid','base'][i]===n);
+  });
+}
+
+function showInfo(type, name, note) {
+  document.getElementById('ip-type').textContent = type;
+  document.getElementById('ip-name').textContent = name;
+  document.getElementById('ip-note').innerHTML   = note.replace(/\n/g,'<br>');
+  document.getElementById('info-panel').style.display = 'block';
+  document.querySelectorAll('.poi-item').forEach(el=>el.classList.remove('active'));
+  const el = document.querySelector(`[data-name="${CSS.escape(name)}"]`);
+  if(el){el.classList.add('active');el.scrollIntoView({block:'nearest',behavior:'smooth'});}
+}
+
+
+
+// ── 1번 대기리 2차 부지 — 노란 원형 마커
+// 주소: 강원 강릉시 왕산면 안반데기길 428 (안반데기 마을)
+L.circleMarker([37.6228, 128.7389],{
+  radius:16, fillColor:'#f59e0b', color:'#d97706',
+  weight:3, fillOpacity:0.85, zIndexOffset:200,
+}).addTo(map).on('click',()=>showInfo(
+  '☀️ 1번 대기리 태양광 — 2차 부지 (150MW)',
+  '강릉시 왕산면 안반데기길 428',
+  '강릉시 왕산면 안반데기 마을 일원\n해발 1,100m 고랭지 채소밭 (국내 최대)\n북서쪽 고원지대 · 개발기간 2026~2031년'
+));
+
+// ── 1차 부지 마커 + 라벨 (37.5874, 128.7770)
+L.circleMarker([37.5874, 128.7770],{
+  radius:16, fillColor:'#f59e0b', color:'#d97706',
+  weight:3, fillOpacity:0.85, zIndexOffset:200,
+}).addTo(map).on('click',()=>showInfo(
+  '☀️ 1번 대기리 태양광 — 1차 부지 (150MW)',
+  '강릉시 왕산면 대기리 1차 부지',
+  '강릉시 왕산면 대기리 일원\n태양광 300MW (1차 : 150MW, 2차 : 150MW)\n개발기간 2026~2031년'
+));
+L.marker([37.5874, 128.7770],{
+  icon:L.divIcon({
+    html:`<div style="background:rgba(245,158,11,0.93);color:#fff;padding:3px 9px;
+          border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;
+          border:1.5px solid #d97706;box-shadow:0 1px 4px rgba(0,0,0,0.3);">☀ 1차 150MW</div>`,
+    iconSize:[95,24],iconAnchor:[47,-8],className:''
+  }),zIndexOffset:201
+}).addTo(map);
+
+// 2차 라벨
+L.marker([37.6228, 128.7389],{
+  icon:L.divIcon({
+    html:`<div style="background:rgba(245,158,11,0.93);color:#fff;padding:3px 9px;
+          border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;
+          border:1.5px solid #d97706;box-shadow:0 1px 4px rgba(0,0,0,0.3);
+          margin-top:22px;">☀ 2차 150MW</div>`,
+    iconSize:[95,24],iconAnchor:[47,-8],className:''
+  }),zIndexOffset:201
+}).addTo(map);
+
+// ── 태양광 마커 & 사이드바
+const solarIcon = ()=>L.divIcon({
+  html:`<div style="width:30px;height:30px;border-radius:50%;background:#f59e0b;
+        border:3px solid #d97706;display:flex;align-items:center;justify-content:center;
+        font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.35);">☀</div>`,
+  iconSize:[30,30],iconAnchor:[15,15],className:''
+});
+async function addSolarMarkers() {
+  for (const s of SOLAR) {
+    if (!s.lat || !s.lon) continue;
+
+    L.marker([s.lat,s.lon],{icon:solarIcon(),zIndexOffset:300})
+     .addTo(map).on('click',()=>showInfo('☀️ 태양광 사업부지',s.name,s.note));
+    const el=document.createElement('div');
+    el.className='poi-item'; el.dataset.name=s.name;
+    const lines = s.note.split('\n');
+    el.innerHTML=`<div class="poi-dot dot-solar"></div>
+      <div><div class="poi-name">${s.name}</div>
+      <div class="poi-sub">${lines[0]}</div>
+      <div class="poi-sub">${lines[1]||''}</div></div>`;
+    el.addEventListener('click',()=>{
+      showInfo('☀️ 태양광 사업부지',s.name,s.note);
+      map.flyTo([s.lat,s.lon],13,{duration:1.2});
+    });
+    document.getElementById('solar-list').appendChild(el);
+  }
+}
+addSolarMarkers();
+
+// ── 강원도 범위
+const inGW = (lat,lon)=>lat>=36.9&&lat<=38.3&&lon>=127.5&&lon<=129.5;
+
+// ── 풍력 데이터
+const windDanji = {};
+let totalCnt = 0;
+
+function addItem(item) {
+  const lat = parseFloat(item['위도(lat)']||'');
+  const lon = parseFloat(item['경도(lon)']||'');
+  if(!lat||!lon||isNaN(lat)||isNaN(lon)) return;
+  if(!inGW(lat,lon)) return;
+
+  const nm  = item['단지명']||'기타';
+  const tno = item['풍력기번호(임시)']||'';
+  const adr = item['주소']||'';
+  const jng = item['준공일']||'';
+  const cls = item['분류']||'';
+
+  if(!windDanji[nm]) windDanji[nm]={items:[],lat_sum:0,lon_sum:0};
+  windDanji[nm].items.push({lat,lon,tno,adr,jng,cls});
+  windDanji[nm].lat_sum+=lat;
+  windDanji[nm].lon_sum+=lon;
+
+  L.circleMarker([lat,lon],{
+    radius:5,fillColor:'#3b82f6',color:'#fff',
+    weight:1.5,fillOpacity:0.9,zIndexOffset:200,
+  }).addTo(map).on('click',()=>showInfo(
+    '💨 풍력발전기 (에너지공단 실제 데이터)',
+    nm+(tno?' '+tno+'호기':''),
+    `단지명: ${nm}\n주소: ${adr}\n준공일: ${jng}\n분류: ${cls}`
+  ));
+  totalCnt++;
+}
+
+function renderWind() {
+  const container=document.getElementById('wind-list');
+  container.innerHTML='';
+  Object.keys(windDanji).sort().forEach(nm=>{
+    const d=windDanji[nm];
+    const cnt=d.items.length;
+    const avgLat=d.lat_sum/cnt, avgLon=d.lon_sum/cnt;
+    const el=document.createElement('div');
+    el.className='poi-item'; el.dataset.name=nm;
+    el.innerHTML=`<div class="poi-dot dot-wind"></div>
+      <div><div class="poi-name">${nm}</div>
+      <div class="poi-sub">${cnt}기 · ${d.items[0].adr||''}</div></div>`;
+    el.addEventListener('click',()=>{
+      map.flyTo([avgLat,avgLon],13,{duration:1.2});
+      showInfo('💨 풍력단지 (에너지공단 실제 데이터)',nm,
+        `발전기 수: ${cnt}기\n주소: ${d.items[0].adr||''}\n준공일: ${d.items[0].jng||''}\n분류: ${d.items[0].cls||''}`);
+    });
+    container.appendChild(el);
+  });
+  const sb=document.getElementById('status-bar');
+  sb.className='s-done';
+  sb.textContent=`✅ 강원도 풍력발전기 ${totalCnt}기 · ${Object.keys(windDanji).length}개 단지`;
+}
+
+async function fetchWind() {
+  const PER=1000;
+  const sb=document.getElementById('status-bar');
+  try {
+    const r1=await fetch(`${API_BASE}?page=1&perPage=${PER}&serviceKey=${API_KEY}`);
+    if(!r1.ok) throw new Error(`HTTP ${r1.status}`);
+    const d1=await r1.json();
+    const total=d1.totalCount||0;
+    sb.textContent=`⏳ 전체 ${total}건 처리 중...`;
+    (d1.data||[]).forEach(addItem);
+
+    const pages=Math.ceil(total/PER);
+    if(pages>1){
+      const jobs=[];
+      for(let p=2;p<=pages;p++){
+        jobs.push(fetch(`${API_BASE}?page=${p}&perPage=${PER}&serviceKey=${API_KEY}`)
+          .then(r=>r.json()).then(d=>(d.data||[]).forEach(addItem)));
+      }
+      await Promise.all(jobs);
+    }
+    renderWind();
+  } catch(err){
+    console.error(err);
+    sb.className='s-error';
+    sb.textContent=`❌ ${err.message}`;
+  }
+}
+
+// ── 주소 검색 (Vworld 검색 API - JSONP 방식으로 CORS 우회)
+function searchAddr() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+
+  // JSONP 콜백 함수명
+  const cbName = '_vwSearchCb_' + Date.now();
+
+  window[cbName] = function(data) {
+    // script 태그 제거
+    const s = document.getElementById('_vw_search_script');
+    if (s) s.remove();
+    delete window[cbName];
+
+    const items = data?.response?.result?.items;
+    if (items && items.length > 0) {
+      const pt = items[0].point;
+      const lat = parseFloat(pt.y), lon = parseFloat(pt.x);
+      map.flyTo([lat, lon], 15, {duration:1.2});
+      if (window._searchMarker) map.removeLayer(window._searchMarker);
+      window._searchMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          html:`<div style="background:#dc2626;color:#fff;padding:3px 8px;border-radius:4px;
+                font-size:11px;font-weight:600;white-space:nowrap;border:1.5px solid #fff;
+                box-shadow:0 1px 4px rgba(0,0,0,0.4);">📍 ${query}</div>`,
+          iconSize:[200,24], iconAnchor:[100,30], className:''
+        }), zIndexOffset:500
+      }).addTo(map);
+    } else {
+      // POI 없으면 주소 검색 시도
+      searchByAddress(query);
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = '_vw_search_script';
+  script.src = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0` +
+    `&crs=epsg:4326&query=${encodeURIComponent(query)}&type=place` +
+    `&format=json&errorformat=json&callback=${cbName}&key=${VWORLD_KEY}`;
+  script.onerror = () => { delete window[cbName]; searchByAddress(query); };
+  document.head.appendChild(script);
+}
+
+function searchByAddress(query) {
+  const cbName = '_vwAddrCb_' + Date.now();
+
+  window[cbName] = function(data) {
+    const s = document.getElementById('_vw_addr_script');
+    if (s) s.remove();
+    delete window[cbName];
+
+    const pt = data?.response?.result?.point;
+    if (pt) {
+      const lat = parseFloat(pt.y), lon = parseFloat(pt.x);
+      map.flyTo([lat, lon], 15, {duration:1.2});
+      if (window._searchMarker) map.removeLayer(window._searchMarker);
+      window._searchMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          html:`<div style="background:#dc2626;color:#fff;padding:3px 8px;border-radius:4px;
+                font-size:11px;font-weight:600;white-space:nowrap;border:1.5px solid #fff;
+                box-shadow:0 1px 4px rgba(0,0,0,0.4);">📍 ${query}</div>`,
+          iconSize:[200,24], iconAnchor:[100,30], className:''
+        }), zIndexOffset:500
+      }).addTo(map);
+    } else {
+      alert(`"${query}" 검색 결과를 찾을 수 없습니다.`);
+    }
+  };
+
+  // 도로명 먼저 시도
+  const script = document.createElement('script');
+  script.id = '_vw_addr_script';
+  script.src = `https://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0` +
+    `&crs=epsg:4326&address=${encodeURIComponent(query)}&refine=true&simple=false` +
+    `&format=json&type=road&callback=${cbName}&key=${VWORLD_KEY}`;
+  script.onerror = () => { delete window[cbName]; alert(`"${query}" 검색 결과를 찾을 수 없습니다.`); };
+  document.head.appendChild(script);
+}
+
+const KMA_KEY = '7g4sRCWvSE6OLEQlr8hOjQ';
+
+// ── 생태자연도 WMS (EGIS - 키 불필요)
+const ecoLayer = L.tileLayer.wms('http://egisapp.me.go.kr/geoserver/gwc/service/wms', {
+  layers:'EGIS:eco_2015_g', format:'image/png', transparent:true,
+  version:'1.1.1', opacity:0.55, attribution:'© 환경부 EGIS'
+});
+let ecoOn=false;
+function toggleEco(){
+  ecoOn=!ecoOn;
+  ecoOn?ecoLayer.addTo(map):map.removeLayer(ecoLayer);
+  const el=document.getElementById('eco-btn');
+  if(el){el.textContent=`🌿 생태자연도 ${ecoOn?'ON':'OFF'}`;
+    el.style.color=ecoOn?'#dc2626':'#16a34a';}
+}
+
+function toggleCriteria(e){
+  if(e) e.stopPropagation();
+  const body=document.getElementById('criteria-body');
+  const arrow=document.getElementById('criteria-arrow');
+  const open=body.style.display==='none'||body.style.display==='';
+  body.style.display=open?'block':'none';
+  arrow.textContent=open?'▲':'▼';
+}
+
+// 퀵메뉴 드래그
+(function(){
+  const el=document.getElementById('criteria-panel');
+  const hd=document.getElementById('criteria-header');
+  let ox=0,oy=0,mx=0,my=0,dragging=false;
+  hd.addEventListener('mousedown',e=>{
+    if(e.target.id==='criteria-arrow') return;
+    dragging=true;
+    ox=el.offsetLeft; oy=el.offsetTop;
+    mx=e.clientX; my=e.clientY;
+    el.style.bottom=''; el.style.right='';
+    el.style.cursor='grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    el.style.left=(ox+(e.clientX-mx))+'px';
+    el.style.top=(oy+(e.clientY-my))+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    dragging=false; el.style.cursor='move';
+  });
+  // 터치 지원
+  hd.addEventListener('touchstart',e=>{
+    if(e.target.id==='criteria-arrow') return;
+    const t=e.touches[0];
+    dragging=true; ox=el.offsetLeft; oy=el.offsetTop;
+    mx=t.clientX; my=t.clientY;
+    el.style.bottom=''; el.style.right='';
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!dragging) return;
+    const t=e.touches[0];
+    el.style.left=(ox+(t.clientX-mx))+'px';
+    el.style.top=(oy+(t.clientY-my))+'px';
+  },{passive:true});
+  document.addEventListener('touchend',()=>{ dragging=false; });
+})();
+
+// ── 2번 건천리 8개 항목 분석 ──────────────────────────
+// 고양산(1,150m) 정상 중심 격자
+const GC_GRID=[];
+(function(){
+  const latMin=37.33,latMax=37.45,lonMin=128.73,lonMax=128.87,step=0.0022;
+  for(let la=latMin;la<=latMax;la+=step)
+    for(let lo=lonMin;lo<=lonMax;lo+=step)
+      GC_GRID.push({lat:parseFloat(la.toFixed(4)),lon:parseFloat(lo.toFixed(4))});
+})();
+
+// ④ Open Topo Data SRTM30m
+async function fetchElev(pts){
+  const res=[],BS=100;
+  for(let i=0;i<pts.length;i+=BS){
+    const b=pts.slice(i,i+BS);
+    try{
+      const r=await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${b.map(p=>`${p.lat},${p.lon}`).join('|')}`);
+      const d=await r.json();
+      d.results.forEach((x,idx)=>res.push({...b[idx],elev:Math.round(x.elevation||0)}));
+    }catch(e){b.forEach(p=>res.push({...p,elev:0}));}
+    await new Promise(r=>setTimeout(r,1200));
+  }
+  return res;
+}
+
+// ⑤ 경사도
+function calcSlope(p,all){
+  const dM=0.0022*111000;let max=0;
+  [[0.0022,0],[-0.0022,0],[0,0.0022],[0,-0.0022]].forEach(([dl,dlo])=>{
+    const nb=all.find(x=>Math.abs(x.lat-(p.lat+dl))<0.0012&&Math.abs(x.lon-(p.lon+dlo))<0.0012);
+    if(nb){const s=Math.atan(Math.abs(nb.elev-p.elev)/dM)*(180/Math.PI);if(s>max)max=s;}
+  });
+  return max;
+}
+
+// ② 백두대간 WFS
+async function chkBaekdu(lat,lon){
+  const d=0.003;
+  try{
+    const r=await fetch(`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature&typename=lt_c_uq111&bbox=${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326&outputFormat=application/json&key=${VWORLD_KEY}`);
+    const j=await r.json();return(j.totalFeatures||j.numberMatched||0)>0;
+  }catch(e){return false;}
+}
+
+// ③ 생태자연도 WFS
+async function chkEco(lat,lon){
+  const d=0.003;
+  try{
+    const r=await fetch(`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature&typename=lt_c_uq114&bbox=${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326&outputFormat=application/json&key=${VWORLD_KEY}`);
+    const j=await r.json();return(j.totalFeatures||j.numberMatched||0)>0;
+  }catch(e){return false;}
+}
+
+// 거리 계산(m)
+function dist(la1,lo1,la2,lo2){
+  const R=6371000,dl=(la1-la2)*Math.PI/180,dlo=(lo1-lo2)*Math.PI/180;
+  const a=Math.sin(dl/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dlo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ⑦ 건천리 실제 마을 좌표
+const VILLAGES=[
+  {lat:37.3230,lon:128.8308,nm:'본동'},{lat:37.3350,lon:128.8380,nm:'큰벌'},
+  {lat:37.3280,lon:128.8250,nm:'소일'},{lat:37.3680,lon:128.8420,nm:'손이골'},
+  {lat:37.3900,lon:128.7980,nm:'함바위'},{lat:37.4020,lon:128.8050,nm:'고양리'},
+  {lat:37.3500,lon:128.8150,nm:'장아리'},
+];
+
+function setNW2(msg){const e=document.getElementById('nw-sub-2');if(e)e.textContent=msg;}
+function setNW2Title(msg,color){
+  const e=document.getElementById('nw-title-2');
+  if(e){e.textContent=msg;e.style.color=color;}
+  const d=document.getElementById('nw-dot-2');
+  if(d)d.style.background=color==='#16a34a'?'#ef4444':color==='#dc2626'?'#94a3b8':'#f59e0b';
+}
+
+async function analyzeGeonCheonri(existTurbines){
+  setNW2(`④ 고도 조회 중... (격자 ${GC_GRID.length}개)`);
+
+  const elevData=await fetchElev(GC_GRID);
+  const high=elevData.filter(p=>p.elev>=900);
+  setNW2(`⑤ 경사도 계산 중... (900m↑ ${high.length}개)`);
+
+  const gentle=high.filter(p=>{p.slp=calcSlope(p,elevData);return p.slp<=25;});
+  setNW2(`② 백두대간 확인 중... (경사도 통과 ${gentle.length}개)`);
+
+  for(const p of gentle){
+    p.baekdu=await chkBaekdu(p.lat,p.lon);
+    await new Promise(r=>setTimeout(r,250));
+  }
+  const noB=gentle.filter(p=>!p.baekdu);
+  setNW2(`③ 생태자연도 확인 중... (백두대간 통과 ${noB.length}개)`);
+
+  for(const p of noB){
+    p.eco=await chkEco(p.lat,p.lon);
+    await new Promise(r=>setTimeout(r,250));
+  }
+  const noE=noB.filter(p=>!p.eco);
+  setNW2(`① 풍속·⑦⑧ 이격 확인 중...`);
+
+  // ① 풍속
+  let windOk=true,windMs='미확인';
+  try{
+    const now=new Date();
+    const h=Math.floor(now.getUTCHours()/12)*12;
+    const tm=now.toISOString().slice(0,10).replace(/-/g,'')+String(h).padStart(2,'0')+'00';
+    const r=await fetch(`https://apihub.kma.go.kr/api/typ01/url/upp_temp.php?tm=${tm}&stn=90&pa=0&help=0&authKey=${KMA_KEY}`);
+    const t=await r.text();
+    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
+    const data=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
+      .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ht>=500&&d.ht<=1500);
+    const avg=data.length?(data.reduce((a,b)=>a+b.ws,0)/data.length):0;
+    windOk=avg>=6;windMs=avg.toFixed(1)+'m/s';
+  }catch(e){windOk=true;}
+
+  // 마을 2km 버퍼 표시
+  VILLAGES.forEach(v=>{
+    L.circleMarker([v.lat,v.lon],{radius:5,fillColor:'#8b5cf6',color:'#fff',weight:2,fillOpacity:0.8,zIndexOffset:300})
+     .addTo(map).bindTooltip(`🏘 ${v.nm}`,{permanent:false});
+    L.circle([v.lat,v.lon],{radius:2000,color:'#8b5cf6',weight:1,fill:false,dashArray:'4 3',opacity:0.4}).addTo(map);
+  });
+
+  // ⑦⑧ 이격 + 터빈간 750m
+  const passed=[];
+  noE.forEach(p=>{
+    if(!windOk) return;
+    if(VILLAGES.some(v=>dist(p.lat,p.lon,v.lat,v.lon)<2000)) return;
+    if(existTurbines.some(t=>dist(p.lat,p.lon,t.lat,t.lon)<300)) return;
+    if(passed.some(q=>dist(p.lat,p.lon,q.lat,q.lon)<750)) return;
+    passed.push(p);
+  });
+
+  if(passed.length===0){
+    setNW2Title('2번 건천리 — 통과 좌표 없음 ❌','#dc2626');
+    setNW2(`풍속:${windMs} / 고도:${high.length} / 경사:${gentle.length} / 백두대간:${noB.length} / 생태:${noE.length} / 최종:0`);
+    console.log('건천리 분석',{windMs,high:high.length,gentle:gentle.length,noB:noB.length,noE:noE.length});
+    return;
+  }
+
+  // 빨간 점 표시
+  passed.forEach((p,i)=>{
+    L.circleMarker([p.lat,p.lon],{
+      radius:7,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:0.92,zIndexOffset:500
+    }).addTo(map).bindPopup(
+      `<b>🔴 건천리 신규터빈 T${i+1}</b><br>`+
+      `위도: ${p.lat} / 경도: ${p.lon}<br>`+
+      `해발: ${p.elev}m / 경사: ${p.slp?.toFixed(1)}°<br>`+
+      `풍속: ${windMs}<br><small>8개 항목 모두 통과</small>`
+    );
+    L.marker([p.lat,p.lon],{
+      icon:L.divIcon({
+        html:`<div style="background:rgba(220,20,20,0.9);color:#fff;border-radius:10px;
+              padding:1px 6px;font-size:9px;font-weight:700;border:1px solid #fff;
+              white-space:nowrap;margin-top:12px;">T${i+1}</div>`,
+        iconSize:[28,16],iconAnchor:[14,-2],className:''
+      }),zIndexOffset:501
+    }).addTo(map);
+  });
+
+  if(passed.length>1){
+    L.polyline(passed.slice().sort((a,b)=>a.lat-b.lat).map(p=>[p.lat,p.lon]),{
+      color:'#ef4444',weight:2,dashArray:'6 4',opacity:0.7
+    }).addTo(map);
+  }
+
+  setNW2Title(`2번 건천리 — 신규터빈 ${passed.length}기 후보 ✅`,'#16a34a');
+  setNW2(`풍속 ${windMs} · 해발 ${passed[0].elev}m · 8개 항목 통과`);
+  map.flyTo([passed[0].lat,passed[0].lon],12,{duration:1.5});
+
+  // 사이드바에 후보 목록 추가
+  const nwList=document.getElementById('new-wind-list');
+  passed.forEach((p,i)=>{
+    const el=document.createElement('div');
+    el.className='poi-item';el.style.cursor='pointer';
+    el.innerHTML=`<div class="poi-dot" style="background:#ef4444;border:2px solid #dc2626;"></div>
+      <div><div class="poi-name">T${i+1} · 해발 ${p.elev}m</div>
+      <div class="poi-sub">${p.lat}, ${p.lon} / 경사 ${p.slp?.toFixed(1)}°</div></div>`;
+    el.addEventListener('click',()=>map.flyTo([p.lat,p.lon],15,{duration:1}));
+    nwList.appendChild(el);
+  });
+}
+
+window.addEventListener('load', async ()=>{
+  await fetchWind();
+  setTimeout(()=>{
+    const turbines=[];
+    Object.values(windDanji).forEach(d=>d.items.forEach(t=>turbines.push({lat:t.lat,lon:t.lon})));
+    analyzeGeonCheonri(turbines);
+  },9000);
+});
+</script>
+</body>
+</html>
