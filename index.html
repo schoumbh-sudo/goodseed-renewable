@@ -966,40 +966,123 @@ function from5186(x,y){
 async function fetchEcoBank1Grade(west,south,east,north,maxFeatures){
   // bbox를 5186으로 변환
   const sw=to5186(west,south), ne=to5186(east,north);
-  // WFS bbox 순서: lc1,lc2,uc1,uc2,좌표체계 = minX,minY,maxX,maxY,EPSG:5186
   const minX=Math.min(sw[0],ne[0]), minY=Math.min(sw[1],ne[1]);
   const maxX=Math.max(sw[0],ne[0]), maxY=Math.max(sw[1],ne[1]);
   const bbox=`${minX},${minY},${maxX},${maxY},EPSG:5186`;
 
-  // netlify 프록시(/api/ecobank/) 경유. serviceKey는 프록시에서 주입하거나 여기서 전달
-  const url=`/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS`+
-    `?serviceKey=${encodeURIComponent(API_KEY)}`+
-    `&typeName=tbl_opn_eczm`+
-    `&eczmGr=1`+
-    `&bbox=${encodeURIComponent(bbox)}`+
-    `&maxFeatures=${maxFeatures||500}`+
-    // 공공데이터포털/에코뱅크 WFS가 XML로 내려오는 경우가 있어 JSON 응답을 명시
-    `&_type=json`+
-    `&outputFormat=${encodeURIComponent('application/json')}`;
+  // 1등급만 요청한다. Netlify _redirects의 /api/ecobank/* 프록시가 필요함.
+  const params = new URLSearchParams({
+    serviceKey: API_KEY,
+    typeName: 'tbl_opn_eczm',
+    typename: 'tbl_opn_eczm',
+    eczmGr: '1',
+    bbox,
+    maxFeatures: String(maxFeatures || 500),
+    outputFormat: 'application/json',
+    _type: 'json'
+  });
+  const url = `/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS?${params.toString()}`;
 
-  const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+  const res=await fetch(url,{signal:AbortSignal.timeout(20000)});
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text=await res.text();
-  // 에러시 XML(OWS Exception) 반환될 수 있음 → JSON 파싱 실패로 처리
-  let json;
-  try{ json=JSON.parse(text); }
-  catch(e){ throw new Error('WFS 응답이 JSON이 아님(인증키/파라미터 확인): '+text.slice(0,120)); }
+
+  const text=(await res.text()).trim();
+  if(!text) return [];
+
+  let features=[];
+
+  // 1) JSON 응답 처리
+  if(text[0]==='{' || text[0]==='['){
+    const json=JSON.parse(text);
+    features = json.features || json?.response?.body?.features || [];
+  } else {
+    // 2) 공공데이터/WFS가 XML(GML)로 내려오는 경우 처리
+    features = parseEcoBankXmlToFeatures(text);
+  }
 
   // API가 eczmGr=1을 무시하거나 전체 등급을 내려주는 경우를 대비해
   // 브라우저에서도 한 번 더 1등급만 필터링한다.
-  return (json.features||[]).filter(isEco1GradeFeature);
+  return features.filter(isEco1GradeFeature);
+}
+
+// 에코뱅크 XML/GML 응답을 Leaflet에서 쓸 수 있는 간단 GeoJSON 형태로 변환
+function parseEcoBankXmlToFeatures(xmlText){
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  if(doc.querySelector('parsererror')){
+    throw new Error('WFS XML 파싱 실패');
+  }
+
+  const exception = doc.querySelector('ExceptionText, exceptionText, OpenAPI_ServiceResponse, cmmMsgHeader');
+  if(exception){
+    const msg = (exception.textContent || '').replace(/\s+/g,' ').trim().slice(0,160);
+    throw new Error('API 오류 응답: '+msg);
+  }
+
+  const getTextByNames = (root, names) => {
+    for(const n of names){
+      const el = Array.from(root.getElementsByTagName('*')).find(x => x.localName === n || x.nodeName === n);
+      if(el && el.textContent) return el.textContent.trim();
+    }
+    return '';
+  };
+
+  const parsePosList = (txt) => {
+    const nums = txt.trim().split(/\s+/).map(Number).filter(Number.isFinite);
+    const coords=[];
+    for(let i=0;i<nums.length-1;i+=2) coords.push([nums[i], nums[i+1]]);
+    return coords;
+  };
+
+  const parseCoordinates = (txt) => {
+    return txt.trim().split(/\s+/).map(pair=>{
+      const a=pair.split(',').map(Number);
+      return Number.isFinite(a[0]) && Number.isFinite(a[1]) ? [a[0],a[1]] : null;
+    }).filter(Boolean);
+  };
+
+  const members = Array.from(doc.getElementsByTagName('*')).filter(el => {
+    const ln = el.localName || '';
+    return ln === 'featureMember' || ln === 'member';
+  });
+
+  const roots = members.length ? members : [doc.documentElement];
+  const features=[];
+
+  roots.forEach(root=>{
+    const props = {
+      eczmGr: getTextByNames(root, ['eczmGr','ECZM_GR','eczm_gr','grade','GRADE','grd','GRD','등급'])
+    };
+
+    const posLists = Array.from(root.getElementsByTagName('*')).filter(el => (el.localName||'') === 'posList');
+    const coordTags = Array.from(root.getElementsByTagName('*')).filter(el => (el.localName||'') === 'coordinates');
+
+    let polygons=[];
+    posLists.forEach(el=>{
+      const ring=parsePosList(el.textContent||'');
+      if(ring.length>=3) polygons.push([ring]);
+    });
+    coordTags.forEach(el=>{
+      const ring=parseCoordinates(el.textContent||'');
+      if(ring.length>=3) polygons.push([ring]);
+    });
+
+    polygons.forEach(poly=>{
+      features.push({
+        type:'Feature',
+        properties:props,
+        geometry:{type:'Polygon', coordinates:poly}
+      });
+    });
+  });
+
+  return features;
 }
 
 // 생태자연도 1등급 판별 — API 속성명이 달라도 최대한 대응
 function isEco1GradeFeature(f){
   const p = f?.properties || {};
-  const keys = Object.keys(p);
-  if(keys.length === 0) return true; // 이미 eczmGr=1로 요청했으므로 속성이 없으면 통과
+  const keys = Object.keys(p).filter(k => p[k] !== undefined && p[k] !== null && String(p[k]).trim() !== '');
+  if(keys.length === 0) return true; // 요청 자체가 eczmGr=1이라 속성이 없으면 통과
 
   const gradeKeys = keys.filter(k=>{
     const nk = String(k).toLowerCase().replace(/[\s_-]/g,'');
