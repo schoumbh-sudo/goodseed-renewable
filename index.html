@@ -968,18 +968,26 @@ async function fetchEcoBank1Grade(west,south,east,north,maxFeatures){
   const sw=to5186(west,south), ne=to5186(east,north);
   const minX=Math.min(sw[0],ne[0]), minY=Math.min(sw[1],ne[1]);
   const maxX=Math.max(sw[0],ne[0]), maxY=Math.max(sw[1],ne[1]);
-  const bbox=`${minX},${minY},${maxX},${maxY},EPSG:5186`;
+  // 공공데이터 문서 기준 bbox 순서: minY,minX,maxY,maxX (EPSG:5186)
+  // 기존 minX,minY,maxX,maxY 순서로 보내면 API가 XML 오류를 반환할 수 있음.
+  const bbox=`${minY},${minX},${maxY},${maxX}`;
 
   // 1등급만 요청한다. Netlify _redirects의 /api/ecobank/* 프록시가 필요함.
+  // 공공데이터포털은 ServiceKey 대소문자를 타는 경우가 있어 ServiceKey로 사용.
   const params = new URLSearchParams({
-    serviceKey: API_KEY,
+    ServiceKey: API_KEY,
+    layers: 'tbl_opn_eczm',
     typeName: 'tbl_opn_eczm',
     typename: 'tbl_opn_eczm',
-    eczmGr: '1',
+    srs: 'EPSG:5186',
     bbox,
+    eczmGr: '1',
+    eczmgr: '1',
+    grade: '1',
     maxFeatures: String(maxFeatures || 500),
     outputFormat: 'application/json',
-    _type: 'json'
+    _type: 'json',
+    resultType: 'results'
   });
   const url = `/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS?${params.toString()}`;
 
