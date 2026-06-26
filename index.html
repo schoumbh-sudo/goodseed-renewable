@@ -6,6 +6,7 @@
 <title>강원도 풍력발전단지 실제 위치 & 태양광 사업부지</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
@@ -37,6 +38,12 @@
   #wind-list { flex: 1; overflow-y: auto; }
   #map-wrap  { flex: 1; position: relative; }
   #map       { width: 100%; height: 100%; }
+  /* 기본 커서: 손바닥 (이동 모드) */
+  .leaflet-container       { cursor: grab !important; }
+  .leaflet-container:active{ cursor: grabbing !important; }
+  /* 클릭 모드 ON 시 body에 클래스 추가로 전환 */
+  body.click-mode .leaflet-container       { cursor: crosshair !important; }
+  body.click-mode .leaflet-container:active{ cursor: crosshair !important; }
   #layer-ctrl { position: absolute; top: 10px; right: 10px; z-index: 1000;
     background: #fff; border-radius: 8px; border: 1px solid #e2e8f0;
     overflow: hidden; display: flex; flex-direction: column;
@@ -77,6 +84,64 @@
   .crit-src { font-size:9px; color:#94a3b8; white-space:nowrap; flex-shrink:0; }
   /* 생태자연도 WMS — 연두색 필터 */
   .eco-green-layer { filter: hue-rotate(60deg) saturate(1.5) brightness(1.1); }
+
+  /* ── 공통 플로팅 패널 시스템 ── */
+  .fp { position:absolute; z-index:1001; background:#fff; border-radius:10px;
+    border:1px solid #e2e8f0; box-shadow:0 4px 20px rgba(0,0,0,0.15);
+    overflow:hidden; min-width:240px; }
+  .fp-header { display:flex; align-items:center; justify-content:space-between;
+    padding:8px 12px; background:#1e293b; color:#fff; font-size:11px; font-weight:600;
+    cursor:move; user-select:none; gap:8px; }
+  .fp-title { display:flex; align-items:center; gap:6px; flex:1; white-space:nowrap; }
+  .fp-controls { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .fp-btn { background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25);
+    color:#fff; border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer;
+    line-height:1.4; transition:background 0.1s; white-space:nowrap; }
+  .fp-btn:hover { background:rgba(255,255,255,0.28); }
+  .fp-collapse { font-size:10px; min-width:22px; text-align:center; }
+  .fp-body { transition:all 0.15s; }
+  .fp-body.collapsed { display:none; }
+
+  /* ── 그림판 전용 */
+  #draw-panel { top:80px; left:305px; min-width:580px; display:none; }
+  #draw-panel.open { display:flex; flex-direction:column; }
+  /* 그림판 캔버스 오버레이 — 지도 위 직접 그리기 */
+  #draw-overlay { position:absolute; top:0; left:0; width:100%; height:100%;
+    z-index:650; pointer-events:none; display:none; }
+  #draw-overlay.active { pointer-events:all; cursor:crosshair; }
+  #draw-toolbar { display:flex; align-items:center; gap:3px; padding:7px 10px;
+    border-bottom:1px solid #f1f5f9; flex-wrap:wrap; background:#f8fafc; }
+  .dt-btn { padding:4px 9px; font-size:11px; font-weight:500; border:1px solid #e2e8f0;
+    border-radius:5px; cursor:pointer; background:#fff; color:#475569;
+    white-space:nowrap; transition:all 0.1s; }
+  .dt-btn:hover { background:#f1f5f9; }
+  .dt-btn.dt-active { background:#1e293b; color:#fff; border-color:#1e293b; }
+  .dt-sep { width:1px; height:20px; background:#e2e8f0; margin:0 2px; flex-shrink:0; }
+  #draw-bottom { padding:6px 10px; display:flex; align-items:center; gap:8px;
+    border-top:1px solid #f1f5f9; background:#f8fafc; flex-wrap:wrap; }
+  #draw-bottom label { font-size:11px; color:#475569; display:flex; align-items:center; gap:4px; }
+  #draw-color { width:26px; height:26px; border:1px solid #e2e8f0; border-radius:4px;
+    cursor:pointer; padding:1px; }
+  #draw-size { width:65px; }
+  #draw-opacity { width:65px; }
+  #draw-text-input { padding:4px 8px; font-size:12px; border:1px solid #e2e8f0;
+    border-radius:5px; width:140px; display:none; }
+  #draw-poly-hint { font-size:11px; color:#7c3aed; display:none; }
+  /* 텍스트 선택 편집 툴팁 */
+  #text-edit-tooltip {
+    position:absolute; z-index:1200; background:#1e293b; border-radius:8px;
+    padding:8px 10px; display:none; flex-direction:column; gap:6px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.3); min-width:220px;
+    border:1px solid rgba(255,255,255,0.1);
+  }
+  #text-edit-tooltip label { font-size:11px; color:#cbd5e1; display:flex; align-items:center; gap:6px; }
+  #text-edit-tooltip input[type=color]  { width:24px; height:24px; border:none; border-radius:3px; cursor:pointer; padding:0; }
+  #text-edit-tooltip input[type=range]  { width:80px; accent-color:#0ea5e9; }
+  #text-edit-tooltip input[type=text]   { flex:1; padding:3px 7px; font-size:12px; border:1px solid #475569; border-radius:4px; background:#0f172a; color:#fff; outline:none; }
+  #text-edit-tooltip .tet-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #text-edit-tooltip .tet-btn { padding:3px 10px; font-size:11px; border:none; border-radius:4px; cursor:pointer; }
+  .tet-apply { background:#0ea5e9; color:#fff; font-weight:600; }
+  .tet-close  { background:#475569; color:#fff; }
 </style>
 </head>
 <body>
@@ -142,6 +207,98 @@
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
       <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
       <button onclick="clearAllRidges()" style="color:#dc2626;">🗑 능선 전체 삭제</button>
+      <button onclick="toggleDrawPanel()" id="draw-btn" style="color:#7c3aed;border-top:1px solid #f1f5f9;">🖌 그림판</button>
+    </div>
+
+    <!-- 지도 위 그리기 캔버스 오버레이 (지도 영역 전체) -->
+    <canvas id="draw-overlay"></canvas>
+
+    <!-- 텍스트 오브젝트 선택 편집 툴팁 -->
+    <div id="text-edit-tooltip">
+      <div class="tet-row">
+        <label>내용<input type="text" id="tet-text" placeholder="텍스트"></label>
+      </div>
+      <div class="tet-row">
+        <label>색상<input type="color" id="tet-color" value="#1e293b"></label>
+        <label>크기<input type="range" id="tet-size" min="10" max="120" value="18">
+          <span id="tet-size-val" style="font-size:10px;color:#94a3b8;min-width:28px;">18px</span>
+        </label>
+        <label style="cursor:pointer;"><input type="checkbox" id="tet-bold" checked> <b style="color:#fff;">B</b></label>
+      </div>
+      <div class="tet-row">
+        <button class="tet-btn tet-apply" onclick="applyTextEdit()">✓ 적용</button>
+        <button class="tet-btn tet-close" onclick="closeTextTooltip()">✕ 닫기</button>
+      </div>
+    </div>
+
+    <!-- ── 그림판 도구 패널 (접기/이동 가능) -->
+    <div id="draw-panel" class="fp">
+      <div class="fp-header" id="draw-header">
+        <span class="fp-title">🖌 그림판</span>
+        <div class="fp-controls">
+          <button class="fp-btn" onclick="exportDrawing()">💾 저장</button>
+          <button class="fp-btn fp-collapse" onclick="fpCollapse('draw')" id="draw-collapse-btn">▼</button>
+          <button class="fp-btn" onclick="toggleDrawPanel()" style="padding:2px 8px;">×</button>
+        </div>
+      </div>
+      <div class="fp-body" id="draw-body">
+        <div id="draw-toolbar">
+          <!-- 기본 도구 -->
+          <button class="dt-btn dt-active" id="dt-pen"    onclick="setDrawTool('pen')">✏️ 펜</button>
+          <button class="dt-btn" id="dt-eraser"           onclick="setDrawTool('eraser')">🧹 지우개</button>
+          <button class="dt-btn" id="dt-move"             onclick="setDrawTool('move')" title="오브젝트 선택·이동">↖ 이동</button>
+          <div class="dt-sep"></div>
+          <!-- 선/도형 -->
+          <button class="dt-btn" id="dt-line"             onclick="setDrawTool('line')">╱ 직선</button>
+          <button class="dt-btn" id="dt-rect"             onclick="setDrawTool('rect')">▭ 사각형</button>
+          <button class="dt-btn" id="dt-circle"           onclick="setDrawTool('circle')">○ 원</button>
+          <button class="dt-btn" id="dt-triangle"         onclick="setDrawTool('triangle')">△ 삼각형</button>
+          <button class="dt-btn" id="dt-arrow"            onclick="setDrawTool('arrow')">→ 화살표</button>
+          <button class="dt-btn" id="dt-polygon"          onclick="setDrawTool('polygon')">⬠ 다각형</button>
+          <button class="dt-btn" id="dt-text"             onclick="setDrawTool('text')">T 텍스트</button>
+          <div class="dt-sep"></div>
+          <!-- 아이콘 도장 -->
+          <button class="dt-btn" id="dt-icon-turbine"     onclick="setDrawTool('icon-turbine')" title="풍력터빈">🌀 터빈</button>
+          <button class="dt-btn" id="dt-icon-substation"  onclick="setDrawTool('icon-substation')" title="변전소/전력계통">⚡ 계통</button>
+          <button class="dt-btn" id="dt-icon-circle"      onclick="setDrawTool('icon-circle')" title="원 아이콘">🔴 원</button>
+          <button class="dt-btn" id="dt-icon-square"      onclick="setDrawTool('icon-square')" title="사각 아이콘">🟦 네모</button>
+          <button class="dt-btn" id="dt-icon-tri"         onclick="setDrawTool('icon-tri')" title="삼각 아이콘">🔺 세모</button>
+          <div class="dt-sep"></div>
+          <button class="dt-btn" onclick="undoDraw()" title="Ctrl+Z">↩ 취소</button>
+          <button class="dt-btn" onclick="clearDraw()" style="color:#dc2626;">🗑 삭제</button>
+        </div>
+        <!-- 옵션 행 1: 색상·선 -->
+        <div id="draw-bottom">
+          <!-- 공통: 선색 / 채우기 -->
+          <label>선색<input type="color" id="draw-color" value="#e11d48"></label>
+          <label id="lbl-fill-on" title="채우기 ON/OFF"><input type="checkbox" id="draw-fill-on"> 채우기</label>
+          <label>채우기색<input type="color" id="draw-fill-color" value="#e11d48" style="opacity:0.4"></label>
+          <div class="dt-sep" style="height:18px;"></div>
+          <!-- 도형 전용 옵션 (텍스트 도구일 때 숨김) -->
+          <span id="shape-opts" style="display:flex;align-items:center;gap:8px;">
+            <label>굵기<input type="range" id="draw-size" min="1" max="30" value="3" style="width:60px;"></label>
+            <label>투명도<input type="range" id="draw-opacity" min="10" max="100" value="100" style="width:60px;"></label>
+            <div class="dt-sep" style="height:18px;"></div>
+            <span style="font-size:11px;color:#475569;">선:</span>
+            <button class="dt-btn dt-active" id="ds-solid" onclick="setDash('solid')" title="실선">—</button>
+            <button class="dt-btn" id="ds-dot"             onclick="setDash('dot')"   title="점선">···</button>
+            <button class="dt-btn" id="ds-dash"            onclick="setDash('dash')"  title="파선">- -</button>
+          </span>
+          <div class="dt-sep" style="height:18px;"></div>
+          <!-- 텍스트 전용 옵션 -->
+          <span id="text-opts" style="display:none;align-items:center;gap:8px;">
+            <label>글자색<input type="color" id="text-color" value="#1e293b"></label>
+            <label>크기<input type="range" id="text-size" min="10" max="80" value="18" style="width:60px;"></label>
+            <label style="cursor:pointer;" title="볼드">
+              <input type="checkbox" id="text-bold" checked> <b>B</b>
+            </label>
+          </span>
+          <!-- 아이콘 크기 -->
+          <label id="lbl-icon-size" style="display:none;">크기<input type="range" id="icon-size" min="20" max="120" value="40" style="width:60px;"></label>
+          <span id="draw-poly-hint">더블클릭으로 완성</span>
+          <span id="draw-mode-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;background:#dcfce7;color:#16a34a;font-weight:600;">✏️ 그리기 ON</span>
+        </div>
+      </div>
     </div>
 
     <div id="info-panel">
@@ -160,26 +317,23 @@
       <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 200m 기준</span></div>
       <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span></div>
     </div>
-    <div id="criteria-panel" style="position:absolute;bottom:60px;left:295px;z-index:1000;
-      background:#fff;border-radius:8px;border:1px solid #e2e8f0;
-      box-shadow:0 2px 8px rgba(0,0,0,0.12);overflow:hidden;min-width:260px;
-      cursor:move;user-select:none;">
-      <div id="criteria-header" style="padding:8px 14px;font-size:11px;font-weight:600;
-        color:#1e293b;background:#f8fafc;border-bottom:1px solid #f1f5f9;
-        display:flex;align-items:center;justify-content:space-between;">
-        <span>⚡ 풍력터빈 설치기준 (8개 항목)</span>
-        <span id="criteria-arrow" onclick="toggleCriteria(event)" style="font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;background:#e2e8f0;">▲</span>
+    <div id="criteria-panel" class="fp" style="bottom:60px;left:295px;">
+      <div class="fp-header" id="criteria-header">
+        <span class="fp-title">⚡ 풍력터빈 설치기준 (8개 항목)</span>
+        <div class="fp-controls">
+          <button class="fp-btn fp-collapse" onclick="fpCollapse('criteria')" id="criteria-collapse-btn">▼</button>
+        </div>
       </div>
-      <div id="criteria-body" style="display:block;">
+      <div class="fp-body" id="criteria-body">
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">① 풍속 <b>6m/s 이상</b></span><span class="crit-src">기상청 WindProfiler</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">② 백두대간 보호구역 <b>미저촉</b></span><span class="crit-src">Vworld WFS</span></div>
-        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">③ 생태자연도 1등급 <b>미저촉</b></span><span class="crit-src">Vworld WFS</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">③ 생태자연도 1등급 <b>미저촉</b></span><span class="crit-src">에코뱅크 WFS</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">④ 해발고도 <b>500m 이상</b></span><span class="crit-src">Open Topo Data</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑤ 경사도 <b>25° 이하</b></span><span class="crit-src">DEM 계산</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑥ 등고선·능선 <b>위치 확인</b></span><span class="crit-src">Vworld WMS</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑦ 주거지 <b>200m 이상 이격</b></span><span class="crit-src">건축물대장 API</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>400m+</b></span><span class="crit-src">에너지공단</span></div>
-        <div style="padding:6px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+        <div style="padding:5px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
           <span>6.0MW · Vestas V150-6.0 · 로터직경 150m</span>
           <span id="crit-summary" style="font-weight:700;color:#94a3b8;">0/8</span>
         </div>
@@ -187,83 +341,96 @@
     </div>
 
     <!-- 클릭 분석 컨트롤 패널 -->
-    <div id="analyze-panel" style="position:absolute;top:70px;right:10px;z-index:1000;
-      background:#fff;border-radius:8px;border:1px solid #e2e8f0;
-      box-shadow:0 2px 8px rgba(0,0,0,0.12);width:240px;overflow:hidden;">
-      <div id="analyze-header" style="padding:8px 14px;font-size:11px;font-weight:600;color:#1e293b;
-        background:#f8fafc;border-bottom:1px solid #f1f5f9;cursor:move;user-select:none;
-        display:flex;align-items:center;justify-content:space-between;">
-        <span>🖱️ 클릭 지점 분석</span><span style="font-size:10px;color:#94a3b8;">이동</span>
-      </div>
-      <div style="padding:10px 14px;">
-        <div style="font-size:10px;color:#64748b;margin-bottom:4px;">📍 클릭 위치</div>
-        <div id="click-coord" style="font-size:11px;color:#334155;font-weight:500;
-          background:#f8fafc;padding:4px 8px;border-radius:4px;margin-bottom:10px;
-          font-family:monospace;">지도를 클릭해주세요</div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <div style="font-size:10px;color:#64748b;">📏 분석 반경</div>
-          <div id="radius-val" style="font-size:11px;font-weight:700;color:#0ea5e9;">2.0 km</div>
-        </div>
-        <input type="range" id="radius-slider" min="0.5" max="5" step="0.5" value="2"
-          style="width:100%;margin-bottom:10px;accent-color:#0ea5e9;"
-          oninput="updateRadius(this.value)"/>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:-8px;margin-bottom:10px;">
-          <span>500m</span><span>2km</span><span>5km</span>
-        </div>
-
-        <div style="display:flex;gap:6px;">
-          <button onclick="startAnalysis()" id="analyze-btn"
-            style="flex:1;padding:7px;font-size:11px;font-weight:600;
-            background:#1e293b;color:#fff;border:none;border-radius:6px;cursor:pointer;">
-            ▶ 분석 시작
+    <div id="analyze-panel" class="fp" style="top:70px;right:10px;width:240px;">
+      <div class="fp-header" id="analyze-header">
+        <span class="fp-title">🖱️ 클릭 지점 분석</span>
+        <div class="fp-controls">
+          <button class="fp-btn" id="click-mode-btn" onclick="toggleClickMode()"
+            style="background:rgba(255,255,255,0.15);font-size:10px;padding:2px 8px;">
+            🤚 이동 중
           </button>
-          <button onclick="resetAnalysis()"
-            style="padding:7px 10px;font-size:11px;background:#f1f5f9;
-            color:#475569;border:none;border-radius:6px;cursor:pointer;">
-            ↺
-          </button>
-        </div>
-
-        <div id="analyze-status" style="margin-top:8px;font-size:10px;color:#64748b;
-          min-height:16px;text-align:center;"></div>
-        <div id="analyze-progress" style="height:3px;background:#f1f5f9;border-radius:2px;
-          margin-top:4px;display:none;">
-          <div id="analyze-bar" style="height:100%;background:#0ea5e9;border-radius:2px;
-            width:0%;transition:width 0.3s;"></div>
+          <button class="fp-btn fp-collapse" onclick="fpCollapse('analyze')" id="analyze-collapse-btn">▼</button>
         </div>
       </div>
-
-
-    <!-- 등고선/능선 육안 검토 패널: 임의 능선 생성 금지, 사용자가 클릭한 지점만 표시 -->
-    <div id="ridge-panel" style="position:absolute;top:455px;right:10px;z-index:1000;
-      background:#fff;border-radius:8px;border:1px solid #e2e8f0;
-      box-shadow:0 2px 8px rgba(0,0,0,0.12);width:240px;overflow:hidden;">
-      <div id="ridge-header" style="padding:8px 14px;font-size:11px;font-weight:600;color:#1e293b;
-        background:#f8fafc;border-bottom:1px solid #f1f5f9;cursor:move;user-select:none;
-        display:flex;align-items:center;justify-content:space-between;">
-        <span>⛰️ 등고선·능선 검토</span><span style="font-size:10px;color:#94a3b8;">이동</span>
-      </div>
-      <div style="padding:10px 14px;">
-        <div style="font-size:10px;color:#64748b;line-height:1.6;margin-bottom:8px;">
-          등고선 지도를 켠 뒤, 실제로 능선이라고 판단한 지점을 클릭해서 표시해줘.<br>
-          <b style="color:#dc2626;">자동/임의 능선선은 생성하지 않음.</b>
-        </div>
-        <button onclick="setLayer('base');setStatus('등고선 지도 모드 — 등고선 흐름을 보고 능선 지점을 선택해주세요',undefined)"
-          style="width:100%;padding:7px;font-size:11px;font-weight:600;background:#0f766e;color:#fff;
-          border:none;border-radius:6px;cursor:pointer;margin-bottom:8px;">
-          🗺 등고선 지도 보기
-        </button>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px;">
-          <button onclick="markTerrain('ridge')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;cursor:pointer;">능선</button>
-          <button onclick="markTerrain('slope')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1;border:1px solid #38bdf8;border-radius:6px;cursor:pointer;">사면</button>
-          <button onclick="markTerrain('valley')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9;border:1px solid #8b5cf6;border-radius:6px;cursor:pointer;">계곡</button>
-        </div>
-        <div id="ridge-status" style="font-size:10px;color:#64748b;line-height:1.5;background:#f8fafc;padding:6px 8px;border-radius:6px;">
-          아직 육안 검토 지점 없음
+      <div class="fp-body" id="analyze-body">
+        <div style="padding:10px 14px;">
+          <div style="font-size:10px;color:#64748b;margin-bottom:4px;">📍 클릭 위치</div>
+          <div id="click-coord" style="font-size:11px;color:#334155;font-weight:500;
+            background:#f8fafc;padding:4px 8px;border-radius:4px;margin-bottom:10px;
+            font-family:monospace;">지도를 클릭해주세요</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <div style="font-size:10px;color:#64748b;">📏 분석 반경</div>
+            <div id="radius-val" style="font-size:11px;font-weight:700;color:#0ea5e9;">2.0 km</div>
+          </div>
+          <input type="range" id="radius-slider" min="0.5" max="5" step="0.5" value="2"
+            style="width:100%;margin-bottom:6px;accent-color:#0ea5e9;"
+            oninput="updateRadius(this.value)"/>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:-4px;margin-bottom:10px;">
+            <span>500m</span><span>2km</span><span>5km</span>
+          </div>
+          <!-- 반경 원 색상/투명도 -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <label style="font-size:10px;color:#64748b;display:flex;align-items:center;gap:4px;">
+              원 색상<input type="color" id="circle-color" value="#0ea5e9"
+                style="width:24px;height:24px;border:1px solid #e2e8f0;border-radius:4px;cursor:pointer;padding:1px;"
+                oninput="updateCircleStyle()">
+            </label>
+            <label style="font-size:10px;color:#64748b;display:flex;align-items:center;gap:4px;">
+              투명도<input type="range" id="circle-opacity" min="0" max="60" value="8"
+                style="width:70px;accent-color:#0ea5e9;"
+                oninput="updateCircleStyle()">
+              <span id="circle-opacity-val" style="font-size:9px;color:#94a3b8;min-width:24px;">8%</span>
+            </label>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="startAnalysis()" id="analyze-btn"
+              style="flex:1;padding:7px;font-size:11px;font-weight:600;
+              background:#1e293b;color:#fff;border:none;border-radius:6px;cursor:pointer;">
+              ▶ 분석 시작
+            </button>
+            <button onclick="resetAnalysis()" title="분석 지우기"
+              style="padding:7px 10px;font-size:11px;background:#fee2e2;
+              color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🗑 지우기</button>
+            <button onclick="resetAnalysis()" title="분석 초기화"
+              style="padding:7px 10px;font-size:11px;background:#f1f5f9;
+              color:#475569;border:none;border-radius:6px;cursor:pointer;">↺</button>
+          </div>
+          <div id="analyze-status" style="margin-top:8px;font-size:10px;color:#64748b;min-height:16px;text-align:center;"></div>
+          <div id="analyze-progress" style="height:3px;background:#f1f5f9;border-radius:2px;margin-top:4px;display:none;">
+            <div id="analyze-bar" style="height:100%;background:#0ea5e9;border-radius:2px;width:0%;transition:width 0.3s;"></div>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- 등고선/능선 육안 검토 패널 -->
+    <div id="ridge-panel" class="fp" style="top:420px;right:10px;width:240px;">
+      <div class="fp-header" id="ridge-header">
+        <span class="fp-title">⛰️ 등고선·능선 검토</span>
+        <div class="fp-controls">
+          <button class="fp-btn fp-collapse" onclick="fpCollapse('ridge')" id="ridge-collapse-btn">▼</button>
+        </div>
+      </div>
+      <div class="fp-body" id="ridge-body">
+        <div style="padding:10px 14px;">
+          <div style="font-size:10px;color:#64748b;line-height:1.6;margin-bottom:8px;">
+            등고선 지도를 켠 뒤, 실제로 능선이라고 판단한 지점을 클릭해서 표시해줘.<br>
+            <b style="color:#dc2626;">자동/임의 능선선은 생성하지 않음.</b>
+          </div>
+          <button onclick="setLayer('base');setStatus('등고선 지도 모드 — 등고선 흐름을 보고 능선 지점을 선택해주세요',undefined)"
+            style="width:100%;padding:7px;font-size:11px;font-weight:600;background:#0f766e;color:#fff;
+            border:none;border-radius:6px;cursor:pointer;margin-bottom:8px;">🗺 등고선 지도 보기
+          </button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px;">
+            <button onclick="markTerrain('ridge')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;cursor:pointer;">능선</button>
+            <button onclick="markTerrain('slope')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1;border:1px solid #38bdf8;border-radius:6px;cursor:pointer;">사면</button>
+            <button onclick="markTerrain('valley')" style="padding:7px 4px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9;border:1px solid #8b5cf6;border-radius:6px;cursor:pointer;">계곡</button>
+          </div>
+          <div id="ridge-status" style="font-size:10px;color:#64748b;line-height:1.5;background:#f8fafc;padding:6px 8px;border-radius:6px;">
+            아직 육안 검토 지점 없음
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -774,7 +941,72 @@ function searchByAddress(query) {
 
 const KMA_KEY = '7g4sRCWvSE6OLEQlr8hOjQ';
 
-// ── 생태자연도 1등급지 — EGIS WFS 프록시 (netlify _redirects 경유)
+// ── 생태자연도 1등급지 — 에코뱅크(국립생태원) ecoapi WFS
+// endpoint : apis.data.go.kr/B553084/ecoapi/EcologyzmpService/wfs/getEcologyzmpWFS
+// typeName : tbl_opn_eczm / 1등급 필터 : eczmGr=1 / 좌표계 : EPSG:5186
+// netlify _redirects 프록시(/api/ecobank/*) 경유 + EPSG:4326↔5186 변환(proj4)
+
+// 중부원점(GRS80) EPSG:5186 정의
+if(window.proj4 && !proj4.defs['EPSG:5186']){
+  proj4.defs('EPSG:5186',
+    '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 '+
+    '+ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs');
+}
+
+// 위경도(4326) → 5186 변환. 반환 [x, y]
+function to5186(lon,lat){
+  return proj4('EPSG:4326','EPSG:5186',[lon,lat]); // [x,y]
+}
+// 5186 → 위경도(4326) 변환. 반환 [lon, lat]
+function from5186(x,y){
+  return proj4('EPSG:5186','EPSG:4326',[x,y]); // [lon,lat]
+}
+
+// 에코뱅크 WFS 1등급 조회 → GeoJSON features 반환(좌표는 5186 그대로)
+async function fetchEcoBank1Grade(west,south,east,north,maxFeatures){
+  // bbox를 5186으로 변환
+  const sw=to5186(west,south), ne=to5186(east,north);
+  // WFS bbox 순서: lc1,lc2,uc1,uc2,좌표체계 = minX,minY,maxX,maxY,EPSG:5186
+  const minX=Math.min(sw[0],ne[0]), minY=Math.min(sw[1],ne[1]);
+  const maxX=Math.max(sw[0],ne[0]), maxY=Math.max(sw[1],ne[1]);
+  const bbox=`${minX},${minY},${maxX},${maxY},EPSG:5186`;
+
+  // netlify 프록시(/api/ecobank/) 경유. serviceKey는 프록시에서 주입하거나 여기서 전달
+  const url=`/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS`+
+    `?serviceKey=${encodeURIComponent(API_KEY)}`+
+    `&typeName=tbl_opn_eczm`+
+    `&eczmGr=1`+
+    `&bbox=${encodeURIComponent(bbox)}`+
+    `&maxFeatures=${maxFeatures||500}`;
+
+  const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text=await res.text();
+  // 에러시 XML(OWS Exception) 반환될 수 있음 → JSON 파싱 실패로 처리
+  let json;
+  try{ json=JSON.parse(text); }
+  catch(e){ throw new Error('WFS 응답이 JSON이 아님(인증키/파라미터 확인): '+text.slice(0,120)); }
+  return json.features||[];
+}
+
+// 5186 GeoJSON feature → Leaflet 위경도 ring 배열로 변환
+function ecoFeatureToLatLngs(f){
+  if(!f.geometry) return [];
+  const type=f.geometry.type;
+  const coords=f.geometry.coordinates;
+  let rings=[];
+  if(type==='Polygon') rings=[coords];
+  else if(type==='MultiPolygon') rings=coords.flat();
+  // 각 ring을 위경도로 변환
+  return rings.map(ring=>{
+    const outer=ring[0]||ring;
+    return outer.map(c=>{
+      const ll=from5186(c[0],c[1]); // [lon,lat]
+      return [ll[1],ll[0]];          // Leaflet [lat,lon]
+    });
+  }).filter(r=>r.length>=3);
+}
+
 let ecoOn=false;
 let ecoPolygonLayers=[];
 
@@ -802,26 +1034,11 @@ async function loadEco1Grade(){
   ecoPolygonLayers=[];
 
   const bounds=map.getBounds();
-  const minX=bounds.getWest().toFixed(5);
-  const minY=bounds.getSouth().toFixed(5);
-  const maxX=bounds.getEast().toFixed(5);
-  const maxY=bounds.getNorth().toFixed(5);
 
   try{
-    // netlify 프록시 경유 → EGIS WFS
-    // G_GRADE=1 필터로 1등급만 조회
-    const cql=encodeURIComponent("G_GRADE='1'");
-    const url=`/api/egis/?service=WFS&version=1.1.0&request=GetFeature`+
-      `&typeName=EGIS:eco_2015_g`+
-      `&outputFormat=application/json`+
-      `&bbox=${minX},${minY},${maxX},${maxY},EPSG:4326`+
-      `&CQL_FILTER=${cql}`+
-      `&maxFeatures=500`;
-
-    const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json=await res.json();
-    const features=json.features||[];
+    const features=await fetchEcoBank1Grade(
+      bounds.getWest(), bounds.getSouth(),
+      bounds.getEast(), bounds.getNorth(), 500);
 
     if(features.length===0){
       btn.textContent='🌿 생태1등급지 (해당 없음)';
@@ -833,15 +1050,7 @@ async function loadEco1Grade(){
 
     // 연두색 폴리곤으로 표시
     features.forEach(f=>{
-      if(!f.geometry) return;
-      const type=f.geometry.type;
-      const coords=f.geometry.coordinates;
-      let rings=[];
-      if(type==='Polygon') rings=[coords];
-      else if(type==='MultiPolygon') rings=coords.flat();
-      rings.forEach(ring=>{
-        const pts=(ring[0]||ring).map(c=>[c[1],c[0]]);
-        if(pts.length<3) return;
+      ecoFeatureToLatLngs(f).forEach(pts=>{
         const poly=L.polygon(pts,{
           color:'#65a30d', weight:1.5,
           fillColor:'#84cc16', fillOpacity:0.4,
@@ -859,15 +1068,15 @@ async function loadEco1Grade(){
     map.once('moveend',()=>{ if(ecoOn) loadEco1Grade(); });
 
   }catch(e){
-    console.warn('EGIS WFS 오류:', e.message);
-    // 실패 시 EGIS WMS 타일로 대체
-    const wms=L.tileLayer.wms('http://egisapp.me.go.kr/geoserver/gwc/service/wms',{
-      layers:'EGIS:eco_2015_g', format:'image/png',
-      transparent:true, version:'1.1.1', opacity:0.55,
-      className:'eco-green-layer', attribution:'© 환경부 EGIS'
+    console.warn('에코뱅크 WFS 오류:', e.message);
+    // 실패 시 에코뱅크 WMS 타일로 대체(전 등급 표시, 시각 확인용)
+    const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
+      serviceKey:API_KEY, layers:'tbl_opn_eczm', format:'image/png',
+      transparent:true, version:'1.1.1', srs:'EPSG:5186', opacity:0.5,
+      attribution:'© 국립생태원 에코뱅크'
     }).addTo(map);
     ecoPolygonLayers.push(wms);
-    btn.textContent='🌿 생태1등급지 ON (WMS)';
+    btn.textContent='🌿 생태1등급지 ON (WMS대체)';
     btn.style.color='#dc2626';
     btn.style.background='#f0fdf4';
   }
@@ -956,14 +1165,68 @@ function toggleContour(){
     el.style.color=contourOn?'#dc2626':'#7c3aed';}
 }
 
-function toggleCriteria(e){
-  if(e) e.stopPropagation();
-  const body=document.getElementById('criteria-body');
-  const arrow=document.getElementById('criteria-arrow');
-  const open=body.style.display==='none'||body.style.display==='';
-  body.style.display=open?'block':'none';
-  arrow.textContent=open?'▲':'▼';
+// ── 공통 패널 시스템: 접기/펼치기 + 드래그
+function fpCollapse(id){
+  const body=document.getElementById(id+'-body');
+  const btn=document.getElementById(id+'-collapse-btn');
+  if(!body||!btn) return;
+  const collapsed=body.classList.contains('collapsed');
+  body.classList.toggle('collapsed',!collapsed);
+  btn.textContent=collapsed?'▼':'▲';
 }
+
+// 공통 드래그 함수 — header ID를 넘기면 해당 패널 전체를 드래그 가능하게 만듦
+function makeDraggable(panelId, headerId, opts){
+  const el=document.getElementById(panelId);
+  const hd=document.getElementById(headerId);
+  if(!el||!hd) return;
+  opts=opts||{};
+  // Leaflet 이벤트 버블링 차단
+  if(window.L&&L.DomEvent){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }
+  let ox=0,oy=0,mx=0,my=0,dragging=false;
+  function startDrag(x,y){
+    // bottom/right → top/left 절대 좌표로 전환
+    const r=el.getBoundingClientRect();
+    const wrap=document.getElementById('map-wrap');
+    const wr=wrap.getBoundingClientRect();
+    el.style.bottom=''; el.style.right='';
+    el.style.left=(r.left-wr.left)+'px';
+    el.style.top=(r.top-wr.top)+'px';
+    ox=el.offsetLeft; oy=el.offsetTop;
+    mx=x; my=y; dragging=true;
+    hd.style.cursor='grabbing';
+  }
+  function moveDrag(x,y){
+    if(!dragging) return;
+    const wrap=document.getElementById('map-wrap');
+    const maxX=wrap.clientWidth-el.offsetWidth-4;
+    const maxY=wrap.clientHeight-el.offsetHeight-4;
+    el.style.left=Math.max(4,Math.min(maxX,ox+(x-mx)))+'px';
+    el.style.top=Math.max(4,Math.min(maxY,oy+(y-my)))+'px';
+  }
+  function endDrag(){ dragging=false; hd.style.cursor='move'; }
+  hd.addEventListener('mousedown',e=>{
+    if(opts.ignoreSelector && e.target.closest(opts.ignoreSelector)) return;
+    startDrag(e.clientX,e.clientY); e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>moveDrag(e.clientX,e.clientY));
+  document.addEventListener('mouseup',endDrag);
+  hd.addEventListener('touchstart',e=>{
+    if(opts.ignoreSelector && e.target.closest(opts.ignoreSelector)) return;
+    const t=e.touches[0]; startDrag(t.clientX,t.clientY);
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!dragging) return;
+    const t=e.touches[0]; moveDrag(t.clientX,t.clientY);
+  },{passive:true});
+  document.addEventListener('touchend',endDrag);
+}
+
+// 4개 패널 드래그 등록
+makeDraggable('criteria-panel','criteria-header');
+makeDraggable('analyze-panel','analyze-header');
+makeDraggable('ridge-panel','ridge-header');
+makeDraggable('draw-panel','draw-header');
 
 function toggleCrit(row){
   const st=row.querySelector('.crit-status');
@@ -988,106 +1251,6 @@ function toggleCrit(row){
   }
 }
 
-// 퀵메뉴 드래그
-(function(){
-  const el=document.getElementById('criteria-panel');
-  const hd=document.getElementById('criteria-header');
-  let ox=0,oy=0,mx=0,my=0,dragging=false;
-  hd.addEventListener('mousedown',e=>{
-    if(e.target.id==='criteria-arrow') return;
-    dragging=true;
-    ox=el.offsetLeft; oy=el.offsetTop;
-    mx=e.clientX; my=e.clientY;
-    el.style.bottom=''; el.style.right='';
-    el.style.cursor='grabbing';
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove',e=>{
-    if(!dragging) return;
-    el.style.left=(ox+(e.clientX-mx))+'px';
-    el.style.top=(oy+(e.clientY-my))+'px';
-  });
-  document.addEventListener('mouseup',()=>{
-    dragging=false; el.style.cursor='move';
-  });
-  // 터치 지원
-  hd.addEventListener('touchstart',e=>{
-    if(e.target.id==='criteria-arrow') return;
-    const t=e.touches[0];
-    dragging=true; ox=el.offsetLeft; oy=el.offsetTop;
-    mx=t.clientX; my=t.clientY;
-    el.style.bottom=''; el.style.right='';
-  },{passive:true});
-  document.addEventListener('touchmove',e=>{
-    if(!dragging) return;
-    const t=e.touches[0];
-    el.style.left=(ox+(t.clientX-mx))+'px';
-    el.style.top=(oy+(t.clientY-my))+'px';
-  },{passive:true});
-  document.addEventListener('touchend',()=>{ dragging=false; });
-})();
-
-
-// 클릭 지점 분석 메뉴바 드래그
-(function(){
-  const el=document.getElementById('analyze-panel');
-  const hd=document.getElementById('analyze-header');
-  if(!el||!hd) return;
-
-  // 패널 안 버튼/슬라이더 클릭이 지도를 클릭한 것으로 처리되지 않게 막음
-  if(window.L && L.DomEvent){
-    L.DomEvent.disableClickPropagation(el);
-    L.DomEvent.disableScrollPropagation(el);
-  }
-
-  let ox=0,oy=0,mx=0,my=0,dragging=false;
-
-  function startDrag(x,y){
-    dragging=true;
-    ox=el.offsetLeft; oy=el.offsetTop;
-    mx=x; my=y;
-    el.style.right=''; el.style.bottom='';
-    el.style.cursor='grabbing';
-    hd.style.cursor='grabbing';
-  }
-
-  function moveDrag(x,y){
-    if(!dragging) return;
-    const wrap=document.getElementById('map-wrap');
-    const maxX=wrap.clientWidth-el.offsetWidth-8;
-    const maxY=wrap.clientHeight-el.offsetHeight-8;
-    const nx=Math.max(8,Math.min(maxX,ox+(x-mx)));
-    const ny=Math.max(8,Math.min(maxY,oy+(y-my)));
-    el.style.left=nx+'px';
-    el.style.top=ny+'px';
-  }
-
-  function endDrag(){
-    dragging=false;
-    el.style.cursor='';
-    hd.style.cursor='move';
-  }
-
-  hd.addEventListener('mousedown',e=>{
-    startDrag(e.clientX,e.clientY);
-    e.preventDefault();
-    e.stopPropagation();
-  });
-  document.addEventListener('mousemove',e=>moveDrag(e.clientX,e.clientY));
-  document.addEventListener('mouseup',endDrag);
-
-  hd.addEventListener('touchstart',e=>{
-    const t=e.touches[0];
-    startDrag(t.clientX,t.clientY);
-    e.stopPropagation();
-  },{passive:true});
-  document.addEventListener('touchmove',e=>{
-    if(!dragging) return;
-    const t=e.touches[0];
-    moveDrag(t.clientX,t.clientY);
-  },{passive:true});
-  document.addEventListener('touchend',endDrag);
-})();
 
 // ── 2번 건천리 8개 항목 분석 ──────────────────────────
 // 고양산(1,150m) 정상 중심 격자
@@ -1187,27 +1350,18 @@ async function analyzeGeonCheonri(existTurbines){
   const noB=gentle.filter(p=>!p.baekdu);
   setNW2(`③ 생태자연도 확인 중... (백두대간 통과 ${noB.length}개)`);
 
-  // 생태자연도 1등급 구역 폴리곤 표시 (건천리 전체 범위)
+  // 생태자연도 1등급 구역 폴리곤 표시 (건천리 전체 범위) — 에코뱅크 ecoapi WFS
   try{
-    const bounds=map.getBounds();
     const d=0.08;
     const cx=37.3230, cy=128.8308;
-    const ecoUrl=`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature`+
-      `&typename=lt_c_uq114&bbox=${cy-d},${cx-d},${cy+d},${cx+d},EPSG:4326`+
-      `&outputFormat=application/json&key=${VWORLD_KEY}`;
-    const ecoRes=await fetch(ecoUrl);
-    const ecoJson=await ecoRes.json();
-    (ecoJson.features||[]).forEach(f=>{
-      if(!f.geometry) return;
-      const coords=f.geometry.coordinates;
-      const polys=f.geometry.type==='Polygon'?[coords]:coords.flat();
-      polys.forEach(ring=>{
-        const pts=ring[0].map(c=>[c[1],c[0]]);
+    const features=await fetchEcoBank1Grade(cy-d, cx-d, cy+d, cx+d, 500);
+    features.forEach(f=>{
+      ecoFeatureToLatLngs(f).forEach(pts=>{
         L.polygon(pts,{color:'#16a34a',weight:2,fillColor:'#16a34a',fillOpacity:0.2,dashArray:'6 3'})
          .addTo(map).bindTooltip('생태자연도 1등급',{permanent:false});
       });
     });
-  }catch(e){}
+  }catch(e){ console.warn('건천리 생태자연도 표시 실패:', e.message); }
 
   for(const p of noB){
     p.eco=await chkEco(p.lat,p.lon);
@@ -1311,14 +1465,49 @@ window.addEventListener('load', async ()=>{
 let clickLat=null, clickLon=null, clickRadius=2.0;
 let clickCircle=null, clickMarker=null, clickResultLayers=[];
 
+// 반경 원 색상·투명도 실시간 업데이트
+function getCircleColor(){ return document.getElementById('circle-color')?.value||'#0ea5e9'; }
+function getCircleOpacity(){ return (parseInt(document.getElementById('circle-opacity')?.value||8))/100; }
+
+function updateCircleStyle(){
+  const opEl=document.getElementById('circle-opacity');
+  const valEl=document.getElementById('circle-opacity-val');
+  if(opEl&&valEl) valEl.textContent=opEl.value+'%';
+  if(!clickCircle) return;
+  const c=getCircleColor(), o=getCircleOpacity();
+  clickCircle.setStyle({color:c, fillColor:c, fillOpacity:o});
+}
+
 function updateRadius(val){
   clickRadius=parseFloat(val);
   document.getElementById('radius-val').textContent=clickRadius.toFixed(1)+' km';
   if(clickCircle) clickCircle.setRadius(clickRadius*1000);
 }
 
-// 지도 클릭 이벤트
+// 클릭 분석 모드 — 기본값: OFF (지도 자유 이동)
+let clickModeOn = false;
+
+function toggleClickMode(){
+  clickModeOn = !clickModeOn;
+  const btn = document.getElementById('click-mode-btn');
+  document.body.classList.toggle('click-mode', clickModeOn);
+  if(clickModeOn){
+    btn.textContent = '📍 클릭 모드 ON';
+    btn.style.background = '#0ea5e9';
+    btn.style.fontWeight = '700';
+  } else {
+    btn.textContent = '🤚 이동 중';
+    btn.style.background = 'rgba(255,255,255,0.15)';
+    btn.style.fontWeight = '';
+  }
+}
+
+// 지도 커서는 CSS .leaflet-container { cursor: grab } 로 처리
+
+// 지도 클릭 이벤트 — clickModeOn일 때만 동작
 map.on('click', function(e){
+  if(!clickModeOn) return;   // ← 이동 모드면 무시
+
   clickLat=parseFloat(e.latlng.lat.toFixed(5));
   clickLon=parseFloat(e.latlng.lng.toFixed(5));
 
@@ -1333,12 +1522,14 @@ map.on('click', function(e){
 
   // 반경 원 표시
   clickCircle=L.circle([clickLat,clickLon],{
-    radius:clickRadius*1000,color:'#0ea5e9',weight:2,
-    fill:true,fillColor:'#0ea5e9',fillOpacity:0.06,dashArray:'6 4'
+    radius:clickRadius*1000,color:getCircleColor(),weight:2,
+    fill:true,fillColor:getCircleColor(),fillOpacity:getCircleOpacity(),dashArray:'6 4'
   }).addTo(map);
 
   document.getElementById('click-coord').textContent=`${clickLat}, ${clickLon}`;
   document.getElementById('analyze-status').textContent='반경 조절 후 분석 시작을 눌러주세요';
+  // 위치 찍으면 자동으로 이동 모드로 복귀
+  if(clickModeOn) toggleClickMode();
 });
 
 function resetAnalysis(){
@@ -1452,26 +1643,17 @@ function clearTerrainMarkers(){
   if(rs) rs.textContent='아직 육안 검토 지점 없음';
 }
 
-// 등고선/능선 검토 패널 드래그
-(function(){
-  const el=document.getElementById('ridge-panel');
-  const hd=document.getElementById('ridge-header');
-  if(!el || !hd) return;
-  let ox=0,oy=0,mx=0,my=0,dragging=false;
-  hd.addEventListener('mousedown',e=>{
-    dragging=true; ox=el.offsetLeft; oy=el.offsetTop; mx=e.clientX; my=e.clientY;
-    el.style.bottom=''; el.style.right=''; e.preventDefault();
-  });
-  document.addEventListener('mousemove',e=>{
-    if(!dragging) return;
-    el.style.left=(ox+(e.clientX-mx))+'px'; el.style.top=(oy+(e.clientY-my))+'px';
-  });
-  document.addEventListener('mouseup',()=>{dragging=false;});
-})();
 
 async function startAnalysis(){
   if(!clickLat||!clickLon){
-    alert('먼저 지도에서 분석할 위치를 클릭해주세요.');return;
+    if(!clickModeOn){
+      // 클릭 모드가 꺼져 있으면 자동으로 켜주고 안내
+      toggleClickMode();
+      document.getElementById('analyze-status').textContent='📍 클릭 모드 ON — 지도를 클릭해 위치를 선택하세요';
+    } else {
+      document.getElementById('analyze-status').textContent='먼저 지도에서 위치를 클릭해주세요';
+    }
+    return;
   }
   const btn=document.getElementById('analyze-btn');
   btn.disabled=true; btn.textContent='분석 중...';
@@ -1556,32 +1738,18 @@ async function startAnalysis(){
   try{ baekduHit=await chkBaekdu(clickLat,clickLon); }catch(e){ baekduHit=false; }
   setCritRow(1,!baekduHit);
 
-  // ③ 생태자연도 1등급 (EGIS WFS 프록시)
+  // ③ 생태자연도 1등급 (에코뱅크 ecoapi WFS)
   setStatus('③ 생태자연도 확인 중...',60);
   let ecoHit=false;
   try{
     const d=0.05;
-    const cql=encodeURIComponent("G_GRADE='1'");
-    const url=`/api/egis/?service=WFS&version=1.1.0&request=GetFeature`+
-      `&typeName=EGIS:eco_2015_g&outputFormat=application/json`+
-      `&bbox=${clickLon-d},${clickLat-d},${clickLon+d},${clickLat+d},EPSG:4326`+
-      `&CQL_FILTER=${cql}&maxFeatures=100`;
-    const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
-    const json=await res.json();
-    const features=json.features||[];
+    const features=await fetchEcoBank1Grade(
+      clickLon-d, clickLat-d, clickLon+d, clickLat+d, 100);
     if(features.length>0){
       ecoHit=true;
       // 연두색 폴리곤 표시
       features.forEach(f=>{
-        if(!f.geometry) return;
-        const type=f.geometry.type;
-        const coords=f.geometry.coordinates;
-        let rings=[];
-        if(type==='Polygon') rings=[coords];
-        else if(type==='MultiPolygon') rings=coords.flat();
-        rings.forEach(ring=>{
-          const pts=(ring[0]||ring).map(c=>[c[1],c[0]]);
-          if(pts.length<3) return;
+        ecoFeatureToLatLngs(f).forEach(pts=>{
           const poly=L.polygon(pts,{
             color:'#65a30d',weight:1.5,
             fillColor:'#84cc16',fillOpacity:0.4,
@@ -1595,9 +1763,9 @@ async function startAnalysis(){
       setStatus('③ 생태자연도 1등급 미저촉 ✅',62);
     }
   }catch(e){
-    // 프록시 실패 시 Vworld WFS 대체
+    // 에코뱅크 실패 시 Vworld WFS 대체
     try{ ecoHit=await chkEco(clickLat,clickLon); }catch(e2){ ecoHit=false; }
-    console.warn('EGIS WFS 실패, Vworld 대체:', e.message);
+    console.warn('에코뱅크 WFS 실패, Vworld 대체:', e.message);
   }
   setCritRow(2,!ecoHit);
 
@@ -1945,6 +2113,710 @@ document.addEventListener('DOMContentLoaded',()=>{
     };
   }
 })();
+
+// ═══════════════════════════════════════
+// 🖌 그림판 — 지도 위 오버레이 직접 그리기
+// ═══════════════════════════════════════
+(function(){
+  // ══════════════════════════════════════
+  // 설계: 2-레이어 구조
+  //  bgCanvas(draw-overlay) : 펜/지우개 픽셀 전용
+  //  objCanvas(draw-obj)    : 도형/아이콘 오브젝트 전용 (이동 가능)
+  // ══════════════════════════════════════
+  let tool = 'pen';
+  let drawActive = false;
+  let painting = false;
+  let startX, startY;
+  let bgHistory = [];    // undo 스택 (bgCanvas ImageData)
+  let objHistory = [];   // undo 스택 (objects 배열 스냅샷)
+  let polyPoints = [];
+  let bgSnap = null;     // 도형 드래그 미리보기용 스냅샷
+  let dashStyle = 'solid';
+
+  // 배경 캔버스 (펜/지우개)
+  let bgCanvas, bgCtx;
+  // 오브젝트 캔버스 (도형/아이콘 — 이동 가능)
+  let objCanvas, objCtx;
+
+  // 오브젝트 목록
+  // 공통 필드: {type, x, y, color, fillOn, fillColor, opacity, size, dash}
+  // 도형 추가: {x2, y2}  (rect/circle/triangle/line/arrow: 드래그 끝점)
+  // 아이콘 추가: {sz}
+  // 다각형 추가: {points:[{x,y}...]}
+  // 텍스트 추가: {text, fontSize}
+  let objects = [];
+  let selIdx = -1;
+  let dragOff = {x:0, y:0};
+  let resizing = false;   // 리사이즈 핸들 드래그 (미구현, 확장 여지)
+
+  // ── 헬퍼 ──────────────────────────────────────────────────
+  function getColor()     { return document.getElementById('draw-color').value; }
+  function getFillOn()    { return document.getElementById('draw-fill-on').checked; }
+  function getFillColor() { return document.getElementById('draw-fill-color').value; }
+  function getSize()      { return parseInt(document.getElementById('draw-size').value); }
+  function getOpacity()   { return parseInt(document.getElementById('draw-opacity').value)/100; }
+  function getIconSize()  { return parseInt(document.getElementById('icon-size').value||40); }
+
+  function getPos(e, cv){
+    const r = cv.getBoundingClientRect();
+    const src = (e.touches && e.touches[0]) || e;
+    return {x: src.clientX - r.left, y: src.clientY - r.top};
+  }
+
+  function syncSize(){
+    const wrap = document.getElementById('map-wrap');
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    [bgCanvas, objCanvas].forEach(cv=>{
+      if(!cv) return;
+      if(cv.width===w && cv.height===h) return;
+      const img = cv.getContext('2d').getImageData(0,0,cv.width,cv.height);
+      cv.width=w; cv.height=h;
+      cv.getContext('2d').putImageData(img,0,0);
+    });
+  }
+
+  function initCanvases(){
+    if(bgCanvas) return;
+    bgCanvas = document.getElementById('draw-overlay');
+    bgCtx = bgCanvas.getContext('2d');
+
+    // objCanvas를 동적으로 생성해서 bgCanvas 위에 올림
+    objCanvas = document.createElement('canvas');
+    objCanvas.id = 'draw-obj';
+    objCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:651;pointer-events:none;display:none;';
+    document.getElementById('map-wrap').appendChild(objCanvas);
+    objCtx = objCanvas.getContext('2d');
+
+    const wrap = document.getElementById('map-wrap');
+    bgCanvas.width = objCanvas.width = wrap.clientWidth;
+    bgCanvas.height = objCanvas.height = wrap.clientHeight;
+
+    window.addEventListener('resize', syncSize);
+    setupBgEvents();
+    setupObjEvents();
+  }
+
+  // ── 공개 API ──────────────────────────────────────────────
+  window.toggleDrawPanel = function(){
+    const p   = document.getElementById('draw-panel');
+    const btn = document.getElementById('draw-btn');
+    const isOpen = p.classList.contains('open');
+    if(isOpen){
+      p.classList.remove('open');
+      btn.style.color='#7c3aed'; btn.style.background='';
+      setDrawActive(false);
+    } else {
+      p.classList.add('open');
+      btn.style.color='#fff'; btn.style.background='#7c3aed';
+      initCanvases();
+      setDrawActive(true);
+    }
+  };
+
+  function setDrawActive(on){
+    drawActive = on;
+    initCanvases();
+    bgCanvas.style.display = on ? 'block' : 'none';
+    objCanvas.style.display = on ? 'block' : 'none';
+    // objCanvas는 이동 도구일 때만 pointer-events 활성
+    updateObjPointerEvents();
+    if(on){ map.dragging.disable(); map.off('click', window._mapClickHandler); }
+    else  { map.dragging.enable();  if(window._mapClickHandler) map.on('click', window._mapClickHandler); }
+    const badge = document.getElementById('draw-mode-badge');
+    if(badge){ badge.textContent=on?'✏️ 그리기 ON':'⏸ 그리기 OFF'; badge.style.background=on?'#dcfce7':'#f1f5f9'; badge.style.color=on?'#16a34a':'#94a3b8'; }
+  }
+
+  function updateObjPointerEvents(){
+    if(!objCanvas) return;
+    const isMoveOrDraw = (tool==='move') || tool.startsWith('icon-') ||
+      ['rect','circle','triangle','line','arrow','polygon','text'].includes(tool);
+    // objCanvas는 이동 도구일 때 클릭 이벤트 수신 (그 외엔 bgCanvas가 받음)
+    objCanvas.style.pointerEvents = (drawActive && tool==='move') ? 'all' : 'none';
+    bgCanvas.style.pointerEvents  = (drawActive && tool!=='move') ? 'all' : 'none';
+    objCanvas.style.cursor = tool==='move' ? 'default' : 'none';
+    bgCanvas.style.cursor  = tool==='eraser' ? 'cell' : tool==='text' ? 'text' : 'crosshair';
+  }
+
+  window.setDrawTool = function(t){
+    tool = t;
+    const ALL = ['pen','eraser','move','line','rect','circle','triangle','arrow','polygon','text',
+                 'icon-turbine','icon-substation','icon-circle','icon-square','icon-tri'];
+    ALL.forEach(id=>{ const b=document.getElementById('dt-'+id); if(b) b.classList.toggle('dt-active',id===t); });
+
+    const isText = t==='text';
+    const isIcon = t.startsWith('icon-');
+    // 도형 옵션 행 토글
+    const shapeOpts = document.getElementById('shape-opts');
+    const textOpts  = document.getElementById('text-opts');
+    if(shapeOpts) shapeOpts.style.display = isText ? 'none' : 'flex';
+    if(textOpts)  textOpts.style.display  = isText ? 'flex' : 'none';
+    document.getElementById('draw-poly-hint').style.display  = (t==='polygon')?'inline':'none';
+    document.getElementById('lbl-icon-size').style.display   = isIcon?'flex':'none';
+    if(t!=='polygon') polyPoints=[];
+    if(t!=='move'){ selIdx=-1; redrawObj(); }
+    updateObjPointerEvents();
+  };
+
+  window.setDash = function(d){
+    dashStyle = d;
+    ['solid','dot','dash'].forEach(id=>{ const b=document.getElementById('ds-'+id); if(b) b.classList.toggle('dt-active',id===d); });
+  };
+
+  // ── Undo / Clear ──────────────────────────────────────────
+  function saveBgHistory(){
+    if(!bgCanvas) return;
+    if(bgHistory.length>30) bgHistory.shift();
+    bgHistory.push(bgCtx.getImageData(0,0,bgCanvas.width,bgCanvas.height));
+  }
+  function saveObjHistory(){
+    if(objHistory.length>30) objHistory.shift();
+    objHistory.push(JSON.parse(JSON.stringify(objects)));
+  }
+
+  window.undoDraw = function(){
+    if(bgHistory.length){ bgCtx.putImageData(bgHistory.pop(),0,0); }
+    if(objHistory.length){ objects=objHistory.pop(); redrawObj(); }
+  };
+
+  window.clearDraw = function(){
+    if(!bgCanvas) return;
+    saveBgHistory(); saveObjHistory();
+    bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+    objects=[]; selIdx=-1; redrawObj(); polyPoints=[];
+  };
+
+  window.exportDrawing = function(){
+    if(!bgCanvas) return;
+    // 두 캔버스를 합쳐서 저장
+    const tmp = document.createElement('canvas');
+    tmp.width=bgCanvas.width; tmp.height=bgCanvas.height;
+    const tc = tmp.getContext('2d');
+    tc.drawImage(bgCanvas,0,0);
+    tc.drawImage(objCanvas,0,0);
+    const a = document.createElement('a');
+    a.download = 'goodseed_sketch_'+Date.now()+'.png';
+    a.href = tmp.toDataURL('image/png');
+    a.click();
+  };
+
+  // ── 스타일 헬퍼 ───────────────────────────────────────────
+  function applyStyleTo(c, opts){
+    opts = opts||{};
+    c.globalAlpha  = opts.opacity  !== undefined ? opts.opacity  : getOpacity();
+    c.strokeStyle  = opts.color    || getColor();
+    c.fillStyle    = opts.fillColor|| getColor();
+    c.lineWidth    = opts.size     || getSize();
+    c.lineCap='round'; c.lineJoin='round';
+    const d = opts.dash || dashStyle;
+    const lw = c.lineWidth;
+    if(d==='dot')       c.setLineDash([lw,lw*2]);
+    else if(d==='dash') c.setLineDash([lw*4,lw*2]);
+    else                c.setLineDash([]);
+  }
+
+  // ── 오브젝트 렌더링 ───────────────────────────────────────
+  function renderObj(o, c){
+    // o: 오브젝트 구조체, c: CanvasRenderingContext2D
+    applyStyleTo(c, o);
+    const fill = o.fillOn, fillC = o.fillColor;
+
+    if(o.type==='line'){
+      c.beginPath(); c.moveTo(o.x,o.y); c.lineTo(o.x2,o.y2); c.stroke();
+    } else if(o.type==='rect'){
+      if(fill){ c.fillStyle=fillC; const oa=c.globalAlpha; c.globalAlpha=oa*0.4; c.fillRect(o.x,o.y,o.x2-o.x,o.y2-o.y); c.globalAlpha=oa; }
+      c.strokeRect(o.x,o.y,o.x2-o.x,o.y2-o.y);
+    } else if(o.type==='circle'){
+      const cx=(o.x+o.x2)/2,cy=(o.y+o.y2)/2,rx=Math.abs(o.x2-o.x)/2,ry=Math.abs(o.y2-o.y)/2;
+      c.beginPath(); c.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+      if(fill){ c.fillStyle=fillC; const oa=c.globalAlpha; c.globalAlpha=oa*0.4; c.fill(); c.globalAlpha=oa; }
+      c.stroke();
+    } else if(o.type==='triangle'){
+      const mx=(o.x+o.x2)/2;
+      c.beginPath(); c.moveTo(mx,o.y); c.lineTo(o.x2,o.y2); c.lineTo(o.x,o.y2); c.closePath();
+      if(fill){ c.fillStyle=fillC; const oa=c.globalAlpha; c.globalAlpha=oa*0.4; c.fill(); c.globalAlpha=oa; }
+      c.stroke();
+    } else if(o.type==='arrow'){
+      c.beginPath(); c.moveTo(o.x,o.y); c.lineTo(o.x2,o.y2); c.stroke();
+      const ang=Math.atan2(o.y2-o.y,o.x2-o.x), hl=Math.max(14,o.size*5);
+      c.setLineDash([]);
+      c.beginPath();
+      c.moveTo(o.x2,o.y2); c.lineTo(o.x2-hl*Math.cos(ang-Math.PI/7),o.y2-hl*Math.sin(ang-Math.PI/7));
+      c.moveTo(o.x2,o.y2); c.lineTo(o.x2-hl*Math.cos(ang+Math.PI/7),o.y2-hl*Math.sin(ang+Math.PI/7));
+      c.stroke();
+    } else if(o.type==='polygon'){
+      if(!o.points||o.points.length<2) return;
+      c.beginPath(); c.moveTo(o.points[0].x,o.points[0].y);
+      o.points.forEach(p=>c.lineTo(p.x,p.y)); c.closePath();
+      if(fill){ c.fillStyle=fillC; const oa=c.globalAlpha; c.globalAlpha=oa*0.4; c.fill(); c.globalAlpha=oa; }
+      c.stroke();
+    } else if(o.type==='text'){
+      const weight = o.bold ? 'bold' : 'normal';
+      c.font=`${weight} ${o.fontSize}px -apple-system,sans-serif`;
+      c.fillStyle=o.color; c.globalAlpha=o.opacity||1; c.fillText(o.text,o.x,o.y);
+      c.globalAlpha=1;
+    } else if(o.type.startsWith('icon-')){
+      renderIcon(c, o.type, o.x, o.y, o.sz, o.color, o.opacity);
+    }
+    c.setLineDash([]);
+  }
+
+  function redrawObj(){
+    objCtx.clearRect(0,0,objCanvas.width,objCanvas.height);
+    objects.forEach(o=> renderObj(o, objCtx));
+    // 선택 박스
+    if(selIdx>=0 && selIdx<objects.length){
+      const o = objects[selIdx];
+      const {bx,by,bw,bh} = getBBox(o);
+      objCtx.save();
+      objCtx.strokeStyle='#0ea5e9'; objCtx.lineWidth=2;
+      objCtx.setLineDash([5,3]); objCtx.globalAlpha=1;
+      objCtx.strokeRect(bx-4, by-4, bw+8, bh+8);
+      objCtx.restore(); objCtx.setLineDash([]);
+    }
+  }
+
+  // 오브젝트 바운딩박스
+  function getBBox(o){
+    if(o.type.startsWith('icon-')){
+      const r=(o.sz||40)*0.6;
+      return {bx:o.x-r, by:o.y-r, bw:r*2, bh:r*2};
+    }
+    if(o.type==='text'){
+      const weight = o.bold ? 'bold' : 'normal';
+      objCtx.font=`${weight} ${o.fontSize}px -apple-system,sans-serif`;
+      const m=objCtx.measureText(o.text);
+      return {bx:o.x, by:o.y-o.fontSize, bw:m.width, bh:o.fontSize*1.2};
+    }
+    if(o.type==='polygon'){
+      const xs=o.points.map(p=>p.x), ys=o.points.map(p=>p.y);
+      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+      return {bx:minX,by:minY,bw:maxX-minX,bh:maxY-minY};
+    }
+    const minX=Math.min(o.x,o.x2||o.x), maxX=Math.max(o.x,o.x2||o.x);
+    const minY=Math.min(o.y,o.y2||o.y), maxY=Math.max(o.y,o.y2||o.y);
+    return {bx:minX,by:minY,bw:Math.max(maxX-minX,4),bh:Math.max(maxY-minY,4)};
+  }
+
+  // hit-test: 클릭 좌표가 어떤 오브젝트의 BBox 안에 있는지
+  function hitTest(px,py){
+    for(let i=objects.length-1;i>=0;i--){
+      const {bx,by,bw,bh}=getBBox(objects[i]);
+      if(px>=bx-6 && px<=bx+bw+6 && py>=by-6 && py<=by+bh+6) return i;
+    }
+    return -1;
+  }
+
+  // 오브젝트 이동 (BBox 기준 delta)
+  function moveObj(idx, dx, dy){
+    const o = objects[idx];
+    o.x+=dx; o.y+=dy;
+    if(o.x2!==undefined){ o.x2+=dx; o.y2+=dy; }
+    if(o.points) o.points.forEach(p=>{p.x+=dx;p.y+=dy;});
+  }
+
+  // ── 아이콘 렌더 ───────────────────────────────────────────
+  const ICON_COLORS={'icon-turbine':'#0ea5e9','icon-substation':'#f97316'};
+
+  function renderIcon(c, t, x, y, sz, color, opacity){
+    c.save();
+    c.globalAlpha = opacity!==undefined ? opacity : getOpacity();
+    c.translate(x,y);
+    const col = ICON_COLORS[t] || color || getColor();
+    const s = sz || getIconSize();
+    c.setLineDash([]);
+    if(t==='icon-turbine'){
+      const tc='#0ea5e9';
+      c.strokeStyle=tc; c.fillStyle=tc; c.lineWidth=Math.max(1.5,s/20);
+      c.beginPath(); c.moveTo(0,s*0.15); c.lineTo(0,s*0.55); c.stroke();
+      c.beginPath(); c.arc(0,s*0.15,s*0.07,0,Math.PI*2); c.fill();
+      for(let i=0;i<3;i++){
+        c.save(); c.rotate(i*Math.PI*2/3);
+        c.beginPath(); c.moveTo(0,0); c.bezierCurveTo(s*0.06,-s*0.05,s*0.04,-s*0.28,0,-s*0.42);
+        c.bezierCurveTo(-s*0.04,-s*0.28,-s*0.06,-s*0.05,0,0);
+        c.fillStyle=tc; c.fill(); c.restore();
+      }
+      c.beginPath(); c.moveTo(-s*0.12,s*0.55); c.lineTo(s*0.12,s*0.55); c.lineWidth=Math.max(2,s/15); c.stroke();
+      c.fillStyle=tc; c.font=`bold ${Math.max(8,s*0.18)}px sans-serif`; c.textAlign='center';
+      c.fillText('터빈',0,s*0.72);
+    } else if(t==='icon-substation'){
+      c.strokeStyle=col; c.fillStyle=col; c.lineWidth=Math.max(1.5,s/20);
+      const hw=s*0.4,hh=s*0.32;
+      c.strokeRect(-hw,-hh,hw*2,hh*2);
+      c.beginPath();
+      c.moveTo(-s*0.1,-s*0.22); c.lineTo(s*0.05,-s*0.02); c.lineTo(-s*0.02,-s*0.02);
+      c.lineTo(s*0.1,s*0.22);   c.lineTo(-s*0.05,s*0.02); c.lineTo(s*0.02,s*0.02);
+      c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(0,-hh); c.lineTo(0,-hh-s*0.12); c.stroke();
+      c.beginPath(); c.moveTo(0,hh);  c.lineTo(0,hh+s*0.12);  c.stroke();
+      c.fillStyle=col; c.font=`bold ${Math.max(8,s*0.18)}px sans-serif`; c.textAlign='center';
+      c.fillText('계통',0,hh+s*0.28);
+    } else if(t==='icon-circle'){
+      c.beginPath(); c.arc(0,0,s*0.38,0,Math.PI*2);
+      c.fillStyle=col; c.fill();
+      c.strokeStyle='#fff'; c.lineWidth=Math.max(1,s/25); c.stroke();
+    } else if(t==='icon-square'){
+      const h=s*0.38;
+      c.fillStyle=col; c.fillRect(-h,-h,h*2,h*2);
+      c.strokeStyle='#fff'; c.lineWidth=Math.max(1,s/25); c.strokeRect(-h,-h,h*2,h*2);
+    } else if(t==='icon-tri'){
+      const h=s*0.42;
+      c.beginPath(); c.moveTo(0,-h); c.lineTo(h,h*0.7); c.lineTo(-h,h*0.7); c.closePath();
+      c.fillStyle=col; c.fill();
+      c.strokeStyle='#fff'; c.lineWidth=Math.max(1,s/25); c.stroke();
+    }
+    c.restore(); c.setLineDash([]);
+  }
+
+  // ── bgCanvas 이벤트 (펜/지우개 + 도형 드래그 + 텍스트/아이콘 클릭) ──
+  function setupBgEvents(){
+    bgCanvas.addEventListener('mousedown',e=>{
+      if(!drawActive||tool==='move') return;
+      e.preventDefault(); e.stopPropagation();
+      const p=getPos(e,bgCanvas);
+
+      if(tool==='polygon'){ handlePolyClick(p.x,p.y); return; }
+      if(tool==='text'){    handleTextClick(p.x,p.y); return; }
+      if(tool.startsWith('icon-')){ placeIcon(p.x,p.y); return; }
+
+      painting=true; startX=p.x; startY=p.y;
+      saveBgHistory(); saveObjHistory();
+
+      if(tool==='pen'||tool==='eraser'){
+        applyStyleTo(bgCtx);
+        if(tool==='eraser'){ bgCtx.globalCompositeOperation='destination-out'; bgCtx.globalAlpha=1; }
+        bgCtx.beginPath(); bgCtx.moveTo(p.x,p.y);
+      } else {
+        // 도형: bgCanvas에 미리보기, mouseup에서 objects에 추가
+        bgSnap=bgCtx.getImageData(0,0,bgCanvas.width,bgCanvas.height);
+      }
+    });
+
+    bgCanvas.addEventListener('mousemove',e=>{
+      if(!painting||!drawActive) return;
+      e.preventDefault();
+      const p=getPos(e,bgCanvas);
+      if(tool==='pen'||tool==='eraser'){
+        bgCtx.lineTo(p.x,p.y); bgCtx.stroke();
+      } else if(bgSnap){
+        // 미리보기: bgCanvas에 임시 렌더
+        bgCtx.putImageData(bgSnap,0,0);
+        previewShape(tool,startX,startY,p.x,p.y);
+      }
+    });
+
+    bgCanvas.addEventListener('mouseup',e=>{
+      if(!painting||!drawActive) return;
+      e.preventDefault();
+      const p=getPos(e,bgCanvas);
+      painting=false;
+      if(tool==='pen'||tool==='eraser'){
+        bgCtx.globalCompositeOperation='source-over'; bgCtx.globalAlpha=1;
+      } else if(bgSnap){
+        bgCtx.putImageData(bgSnap,0,0); // 미리보기 지우기
+        bgSnap=null;
+        // objects에 추가 → objCanvas에서 관리
+        addShapeObject(tool,startX,startY,p.x,p.y);
+        redrawObj();
+      }
+    });
+
+    bgCanvas.addEventListener('mouseleave',()=>{
+      if(painting&&(tool==='pen'||tool==='eraser')){ painting=false; bgCtx.globalCompositeOperation='source-over'; bgCtx.globalAlpha=1; }
+    });
+    bgCanvas.addEventListener('dblclick',e=>{
+      if(tool==='polygon') finishPolygon();
+    });
+    bgCanvas.addEventListener('touchstart',e=>{
+      if(!drawActive||tool==='move') return; e.preventDefault();
+      const p=getPos(e,bgCanvas);
+      if(tool==='polygon'){ handlePolyClick(p.x,p.y); return; }
+      if(tool.startsWith('icon-')){ placeIcon(p.x,p.y); return; }
+      painting=true; startX=p.x; startY=p.y; saveBgHistory();
+      applyStyleTo(bgCtx); bgCtx.beginPath(); bgCtx.moveTo(p.x,p.y);
+    },{passive:false});
+    bgCanvas.addEventListener('touchmove',e=>{
+      if(!painting||!drawActive) return; e.preventDefault();
+      const p=getPos(e,bgCanvas); bgCtx.lineTo(p.x,p.y); bgCtx.stroke();
+    },{passive:false});
+    bgCanvas.addEventListener('touchend',()=>{ painting=false; });
+  }
+
+  // 도형 미리보기 (bgCanvas에만 임시로 그림 — 확정 전)
+  function previewShape(t,x1,y1,x2,y2){
+    const tmpObj={type:t,x:x1,y:y1,x2,y2,color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle};
+    renderObj(tmpObj,bgCtx);
+  }
+
+  // 도형 확정 → objects에 추가
+  function addShapeObject(t,x1,y1,x2,y2){
+    if(Math.abs(x2-x1)<2 && Math.abs(y2-y1)<2) return; // 너무 작은 클릭 무시
+    saveObjHistory();
+    objects.push({type:t,x:x1,y:y1,x2,y2,color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
+  }
+
+  // 아이콘 배치
+  function placeIcon(x,y){
+    saveObjHistory();
+    const t=tool;
+    objects.push({type:t,x,y,sz:getIconSize(),color:ICON_COLORS[t]||getColor(),opacity:getOpacity()});
+    redrawObj();
+  }
+
+  // ── objCanvas 이벤트 (이동 도구) ──────────────────────────
+  function setupObjEvents(){
+    let isDragging=false;
+    let prevX,prevY;
+
+    objCanvas.addEventListener('mousedown',e=>{
+      if(!drawActive||tool!=='move') return;
+      e.preventDefault(); e.stopPropagation();
+      const p=getPos(e,objCanvas);
+      selIdx=hitTest(p.x,p.y);
+      if(selIdx>=0){
+        isDragging=true;
+        prevX=p.x; prevY=p.y;
+        saveObjHistory();
+        objCanvas.style.cursor='grabbing';
+        // 텍스트 오브젝트면 편집 툴팁 표시
+        if(objects[selIdx].type==='text') showTextTooltip(selIdx, p.x, p.y);
+        else closeTextTooltip();
+      } else {
+        selIdx=-1;
+        closeTextTooltip();
+        redrawObj();
+      }
+    });
+
+    objCanvas.addEventListener('mousemove',e=>{
+      if(!drawActive||tool!=='move') return;
+      const p=getPos(e,objCanvas);
+      if(!isDragging){
+        objCanvas.style.cursor = hitTest(p.x,p.y)>=0 ? 'grab' : 'default';
+        return;
+      }
+      e.preventDefault();
+      const dx=p.x-prevX, dy=p.y-prevY;
+      moveObj(selIdx,dx,dy);
+      prevX=p.x; prevY=p.y;
+      redrawObj();
+      // 텍스트 드래그 중 툴팁 위치도 따라 이동
+      if(selIdx>=0 && objects[selIdx]?.type==='text') updateTextTooltipPos(selIdx);
+    });
+
+    objCanvas.addEventListener('mouseup',e=>{
+      if(!isDragging) return;
+      isDragging=false;
+      objCanvas.style.cursor='grab';
+    });
+
+    objCanvas.addEventListener('mouseleave',()=>{ isDragging=false; });
+
+    // 터치 이동
+    objCanvas.addEventListener('touchstart',e=>{
+      if(!drawActive||tool!=='move') return; e.preventDefault();
+      const p=getPos(e,objCanvas);
+      selIdx=hitTest(p.x,p.y);
+      if(selIdx>=0){ isDragging=true; prevX=p.x; prevY=p.y; saveObjHistory(); }
+    },{passive:false});
+    objCanvas.addEventListener('touchmove',e=>{
+      if(!isDragging) return; e.preventDefault();
+      const p=getPos(e,objCanvas);
+      moveObj(selIdx,p.x-prevX,p.y-prevY);
+      prevX=p.x; prevY=p.y; redrawObj();
+    },{passive:false});
+    objCanvas.addEventListener('touchend',()=>{ isDragging=false; });
+  }
+
+  // ── 다각형 ────────────────────────────────────────────────
+  function handlePolyClick(x,y){
+    if(!polyPoints.length){ saveBgHistory(); saveObjHistory(); }
+    polyPoints.push({x,y});
+    // 미리보기 점/선을 bgCanvas에
+    applyStyleTo(bgCtx);
+    bgCtx.beginPath(); bgCtx.arc(x,y,Math.max(2,getSize()/2),0,Math.PI*2); bgCtx.fill();
+    if(polyPoints.length>1){
+      const prev=polyPoints[polyPoints.length-2];
+      bgCtx.beginPath(); bgCtx.moveTo(prev.x,prev.y); bgCtx.lineTo(x,y); bgCtx.stroke();
+    }
+  }
+
+  function finishPolygon(){
+    if(polyPoints.length<3){ polyPoints=[]; return; }
+    // 미리보기 지우고 objects에 추가
+    if(bgHistory.length) bgCtx.putImageData(bgHistory[bgHistory.length-1],0,0);
+    saveObjHistory();
+    objects.push({type:'polygon',x:polyPoints[0].x,y:polyPoints[0].y,points:polyPoints.slice(),color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
+    polyPoints=[]; redrawObj();
+  }
+
+  // ── 텍스트 ────────────────────────────────────────────────
+  // ── 텍스트 편집 툴팁 ─────────────────────────────────────
+  let editingTextIdx = -1;
+
+  function showTextTooltip(idx, cx, cy){
+    editingTextIdx = idx;
+    const o = objects[idx];
+    const tooltip = document.getElementById('text-edit-tooltip');
+    if(!tooltip) return;
+
+    // 필드 채우기
+    document.getElementById('tet-text').value  = o.text;
+    document.getElementById('tet-color').value = o.color||'#1e293b';
+    document.getElementById('tet-size').value  = o.fontSize||18;
+    document.getElementById('tet-size-val').textContent = (o.fontSize||18)+'px';
+    document.getElementById('tet-bold').checked = !!o.bold;
+
+    // 실시간 미리보기 이벤트
+    ['tet-color','tet-size','tet-bold','tet-text'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.oninput = ()=>previewTextEdit(idx);
+      if(el && id==='tet-size') el.oninput = ()=>{
+        document.getElementById('tet-size-val').textContent=el.value+'px';
+        previewTextEdit(idx);
+      };
+    });
+
+    tooltip.style.display='flex';
+    updateTextTooltipPos(idx);
+  }
+
+  function updateTextTooltipPos(idx){
+    const tooltip=document.getElementById('text-edit-tooltip');
+    if(!tooltip||tooltip.style.display==='none') return;
+    const o=objects[idx];
+    const wrap=document.getElementById('map-wrap');
+    const oc=objCanvas.getBoundingClientRect();
+    const wr=wrap.getBoundingClientRect();
+    // 텍스트 오브젝트 위치 기준 → 아래에 표시
+    let tx = Math.round(oc.left - wr.left + o.x);
+    let ty = Math.round(oc.top  - wr.top  + o.y + 8);
+    // 화면 밖으로 나가지 않게 클램프
+    const tw=tooltip.offsetWidth||230, th=tooltip.offsetHeight||100;
+    if(tx+tw > wrap.clientWidth-8)  tx = wrap.clientWidth-tw-8;
+    if(tx < 4) tx = 4;
+    if(ty+th > wrap.clientHeight-8) ty = Math.round(oc.top - wr.top + o.y - th - 8);
+    tooltip.style.left = tx+'px';
+    tooltip.style.top  = ty+'px';
+  }
+
+  function previewTextEdit(idx){
+    if(idx<0||idx>=objects.length) return;
+    const o=objects[idx];
+    o.text     = document.getElementById('tet-text').value||o.text;
+    o.color    = document.getElementById('tet-color').value;
+    o.fontSize = parseInt(document.getElementById('tet-size').value)||18;
+    o.bold     = document.getElementById('tet-bold').checked;
+    redrawObj();
+  }
+
+  window.applyTextEdit = function(){
+    if(editingTextIdx<0) return;
+    previewTextEdit(editingTextIdx);
+    closeTextTooltip();
+  };
+
+  window.closeTextTooltip = function(){
+    const tooltip=document.getElementById('text-edit-tooltip');
+    if(tooltip) tooltip.style.display='none';
+    editingTextIdx=-1;
+  };
+
+  function handleTextClick(x,y){
+    // 기존 인라인 인풋이 있으면 제거
+    const old=document.getElementById('draw-inline-input');
+    if(old) old.remove();
+
+    const fs    = parseInt(document.getElementById('text-size').value)||18;
+    const bold  = document.getElementById('text-bold').checked;
+    const color = document.getElementById('text-color').value;
+
+    // objCanvas 위치 기준으로 절대 좌표 계산
+    const wrap = document.getElementById('map-wrap');
+    const wr   = wrap.getBoundingClientRect();
+    const oc   = objCanvas.getBoundingClientRect();
+
+    const inp = document.createElement('input');
+    inp.id = 'draw-inline-input';
+    inp.type = 'text';
+    inp.placeholder = '입력 후 Enter';
+    inp.style.cssText = [
+      `position:absolute`,
+      `left:${Math.round(oc.left - wr.left + x)}px`,
+      `top:${Math.round(oc.top  - wr.top  + y - fs)}px`,
+      `font-size:${fs}px`,
+      `font-weight:${bold?'bold':'normal'}`,
+      `color:${color}`,
+      `background:rgba(255,255,255,0.85)`,
+      `border:1.5px dashed #0ea5e9`,
+      `border-radius:3px`,
+      `padding:1px 4px`,
+      `min-width:80px`,
+      `max-width:300px`,
+      `z-index:1100`,
+      `outline:none`,
+      `font-family:-apple-system,sans-serif`
+    ].join(';');
+
+    wrap.appendChild(inp);
+    inp.focus();
+
+    function commit(){
+      const txt = inp.value.trim();
+      inp.remove();
+      if(!txt) return;
+      saveObjHistory();
+      objects.push({type:'text', x, y, text:txt, fontSize:fs, bold, color, opacity:getOpacity()});
+      redrawObj();
+    }
+
+    inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); commit(); }
+      if(e.key==='Escape'){ inp.remove(); }
+      e.stopPropagation();  // 지도 키 이벤트 차단
+    });
+    inp.addEventListener('blur', ()=>{ setTimeout(commit, 80); });
+  }
+
+  // ── 전역 키보드 ───────────────────────────────────────────
+  document.addEventListener('keydown',e=>{
+    if(!drawActive) return;
+    if(e.ctrlKey&&e.key==='z'){ e.preventDefault(); window.undoDraw(); }
+    if(e.key==='Escape') setDrawActive(false);
+    if((e.key==='Delete'||e.key==='Backspace')&&tool==='move'&&selIdx>=0){
+      saveObjHistory(); objects.splice(selIdx,1); selIdx=-1; redrawObj();
+    }
+  });
+
+  // ── 채우기 체크박스 + 텍스트 컨트롤 실시간 바인딩 (DOM 준비 후) ──
+  document.addEventListener('DOMContentLoaded',function(){
+    const fillOn=document.getElementById('draw-fill-on');
+    const fillColorPicker=document.getElementById('draw-fill-color');
+    if(fillOn&&fillColorPicker){
+      fillColorPicker.style.opacity='0.4';
+      fillOn.addEventListener('change',function(){
+        fillColorPicker.style.opacity=this.checked?'1':'0.4';
+        if(this.checked) fillColorPicker.value=document.getElementById('draw-color').value;
+      });
+    }
+    // 텍스트 패널 컨트롤 → 인라인 input 실시간 반영
+    function syncInlineInput(){
+      const inp=document.getElementById('draw-inline-input');
+      if(!inp) return;
+      const color=document.getElementById('text-color')?.value||'#1e293b';
+      const size =document.getElementById('text-size')?.value||18;
+      const bold =document.getElementById('text-bold')?.checked;
+      inp.style.color     = color;
+      inp.style.fontSize  = size+'px';
+      inp.style.fontWeight= bold?'bold':'normal';
+    }
+    ['text-color','text-size','text-bold'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', syncInlineInput);
+      if(el) el.addEventListener('change', syncInlineInput);
+    });
+  });
+})();
+
 
 </script>
 
