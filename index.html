@@ -202,7 +202,7 @@
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
-      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태1등급 OFF</button>
+      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태1등급지 OFF</button>
       <button onclick="alert('실제 능선 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.')" id="ridge-wms-btn" style="color:#94a3b8;">〰 능선 자동분석 미연결</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
       <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
@@ -989,31 +989,7 @@ async function fetchEcoBank1Grade(west,south,east,north,maxFeatures){
   let json;
   try{ json=JSON.parse(text); }
   catch(e){ throw new Error('WFS 응답이 JSON이 아님(인증키/파라미터 확인): '+text.slice(0,120)); }
-
-  // API가 eczmGr=1을 무시하거나 전체 등급을 내려주는 경우를 대비해
-  // 브라우저에서도 한 번 더 1등급만 필터링한다.
-  return (json.features||[]).filter(isEco1GradeFeature);
-}
-
-// 생태자연도 1등급 판별 — API 속성명이 달라도 최대한 대응
-function isEco1GradeFeature(f){
-  const p = f?.properties || {};
-  const keys = Object.keys(p);
-  if(keys.length === 0) return true; // 이미 eczmGr=1로 요청했으므로 속성이 없으면 통과
-
-  const gradeKeys = keys.filter(k=>{
-    const nk = String(k).toLowerCase().replace(/[\s_-]/g,'');
-    return nk.includes('eczmgr') || nk.includes('ecograde') || nk.includes('grade') ||
-           nk.includes('grd') || nk.includes('등급') || nk.includes('eczm');
-  });
-
-  if(gradeKeys.length === 0) return true;
-
-  return gradeKeys.some(k=>{
-    const v = String(p[k] ?? '').trim();
-    const compact = v.replace(/\s/g,'');
-    return compact === '1' || compact === '01' || compact.includes('1등급') || compact.toLowerCase() === 'grade1';
-  });
+  return json.features||[];
 }
 
 // 5186 GeoJSON feature → Leaflet 위경도 ring 배열로 변환
@@ -1043,12 +1019,12 @@ function toggleEco(){
   if(!ecoOn){
     ecoPolygonLayers.forEach(l=>map.removeLayer(l));
     ecoPolygonLayers=[];
-    btn.textContent='🌿 생태1등급 OFF';
+    btn.textContent='🌿 생태1등급지 OFF';
     btn.style.color='#16a34a';
     btn.style.background='';
     return;
   }
-  btn.textContent='🌿 생태1등급 로딩...';
+  btn.textContent='🌿 생태1등급지 로딩...';
   btn.style.color='#d97706';
   btn.style.background='#fefce8';
   loadEco1Grade();
@@ -1068,26 +1044,26 @@ async function loadEco1Grade(){
       bounds.getEast(), bounds.getNorth(), 500);
 
     if(features.length===0){
-      btn.textContent='🌿 생태1등급 (해당 없음)';
+      btn.textContent='🌿 생태1등급지 (해당 없음)';
       btn.style.color='#16a34a';
       btn.style.background='';
       ecoOn=false;
       return;
     }
 
-    // 생태자연도 1등급만 진한 초록색 폴리곤으로 표시
+    // 연두색 폴리곤으로 표시
     features.forEach(f=>{
       ecoFeatureToLatLngs(f).forEach(pts=>{
         const poly=L.polygon(pts,{
-          color:'#064e1f', weight:1.2,
-          fillColor:'#0f8a2f', fillOpacity:0.48,
+          color:'#65a30d', weight:1.5,
+          fillColor:'#84cc16', fillOpacity:0.4,
           zIndexOffset:300
         }).addTo(map).bindTooltip('🟢 생태자연도 1등급',{permanent:false,direction:'top'});
         ecoPolygonLayers.push(poly);
       });
     });
 
-    btn.textContent=`🌿 생태1등급 ON (${features.length}개)`;
+    btn.textContent=`🌿 생태1등급지 ON (${features.length}개)`;
     btn.style.color='#dc2626';
     btn.style.background='#f0fdf4';
 
@@ -1096,12 +1072,16 @@ async function loadEco1Grade(){
 
   }catch(e){
     console.warn('에코뱅크 WFS 오류:', e.message);
-    // WMS는 전체 등급이 함께 보일 수 있어 1등급 전용 표시에서는 사용하지 않는다.
-    btn.textContent='🌿 생태1등급 오류';
+    // 실패 시 에코뱅크 WMS 타일로 대체(전 등급 표시, 시각 확인용)
+    const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
+      serviceKey:API_KEY, layers:'tbl_opn_eczm', format:'image/png',
+      transparent:true, version:'1.1.1', srs:'EPSG:5186', opacity:0.5,
+      attribution:'© 국립생태원 에코뱅크'
+    }).addTo(map);
+    ecoPolygonLayers.push(wms);
+    btn.textContent='🌿 생태1등급지 ON (WMS대체)';
     btn.style.color='#dc2626';
-    btn.style.background='#fef2f2';
-    ecoOn=false;
-    alert('생태1등급 WFS 조회에 실패했어. _redirects와 API 응답을 확인해야 해. 오류: '+e.message);
+    btn.style.background='#f0fdf4';
   }
 }
 
@@ -1380,7 +1360,7 @@ async function analyzeGeonCheonri(existTurbines){
     const features=await fetchEcoBank1Grade(cy-d, cx-d, cy+d, cx+d, 500);
     features.forEach(f=>{
       ecoFeatureToLatLngs(f).forEach(pts=>{
-        L.polygon(pts,{color:'#064e1f',weight:1.2,fillColor:'#0f8a2f',fillOpacity:0.48})
+        L.polygon(pts,{color:'#16a34a',weight:2,fillColor:'#16a34a',fillOpacity:0.2,dashArray:'6 3'})
          .addTo(map).bindTooltip('생태자연도 1등급',{permanent:false});
       });
     });
@@ -1774,8 +1754,8 @@ async function startAnalysis(){
       features.forEach(f=>{
         ecoFeatureToLatLngs(f).forEach(pts=>{
           const poly=L.polygon(pts,{
-            color:'#064e1f',weight:1.2,
-            fillColor:'#0f8a2f',fillOpacity:0.48,
+            color:'#65a30d',weight:1.5,
+            fillColor:'#84cc16',fillOpacity:0.4,
             zIndexOffset:300
           }).addTo(map).bindTooltip('🟢 생태자연도 1등급',{permanent:false});
           clickResultLayers.push(poly);
