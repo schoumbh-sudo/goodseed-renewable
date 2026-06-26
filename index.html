@@ -17,7 +17,11 @@
   header span { font-size: 11px; color: rgba(255,255,255,0.4); }
   #layout { display: flex; flex: 1; overflow: hidden; }
   #sidebar { width: 285px; flex-shrink: 0; background: #fff;
-             border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
+             border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden;
+             min-width: 160px; max-width: 520px; }
+  #sidebar-resizer { width:5px; flex-shrink:0; cursor:col-resize; background:transparent;
+    transition:background 0.15s; }
+  #sidebar-resizer:hover { background:#0ea5e9; }
   .sec-title { padding: 9px 14px 5px; font-size: 10px; font-weight: 600; color: #94a3b8;
                text-transform: uppercase; letter-spacing: 0.6px;
                border-bottom: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0; }
@@ -85,7 +89,28 @@
   /* 생태자연도 WMS — 연두색 필터 */
   .eco-green-layer { filter: hue-rotate(60deg) saturate(1.5) brightness(1.1); }
 
-  /* ── 공통 플로팅 패널 시스템 ── */
+  /* ── 패널 매니저 */
+  .pm-tab{flex:1;padding:5px 2px;font-size:10px;color:#888;text-align:center;cursor:pointer;
+    border-right:1px solid #444;transition:all 0.1s;white-space:nowrap;}
+  .pm-tab:last-child{border-right:none;}
+  .pm-tab.active{background:#3a3a3a;color:#fff;font-weight:600;}
+  .pm-tab:hover:not(.active){background:#2f2f2f;color:#ccc;}
+  .pm-content{display:none;max-height:380px;overflow-y:auto;}
+  .pm-content.active{display:block;}
+  .pm-sec{padding:4px 10px;font-size:9px;color:#555;font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;background:#1e1e1e;border-bottom:1px solid #333;}
+  .pm-row{display:flex;align-items:center;gap:7px;padding:6px 10px;
+    border-bottom:1px solid #333;cursor:pointer;font-size:11px;color:#bbb;transition:background 0.1s;}
+  .pm-row:hover{background:#3a3a3a;}
+  .pm-sel{background:#0d47a1;color:#fff;}
+  .pm-eye{font-size:12px;width:16px;text-align:center;flex-shrink:0;opacity:0.4;}
+  .pm-eye.on{opacity:1;}
+  .pm-th{width:26px;height:20px;border-radius:3px;flex-shrink:0;border:1px solid #555;
+    display:flex;align-items:center;justify-content:center;font-size:10px;}
+  .pm-nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pm-badge{font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,255,255,0.1);
+    flex-shrink:0;color:#888;}
+  .pm-badge.on{background:#16a34a;color:#fff;}
   .fp { position:absolute; z-index:1001; background:#fff; border-radius:10px;
     border:1px solid #e2e8f0; box-shadow:0 4px 20px rgba(0,0,0,0.15);
     overflow:hidden; min-width:240px; }
@@ -184,6 +209,7 @@
     <div id="status-bar" class="s-loading">⏳ 에너지공단 API 호출 중...</div>
     <div id="wind-list"></div>
   </div>
+  <div id="sidebar-resizer"></div>
   <div id="map-wrap">
     <div id="search-bar" style="position:absolute;top:10px;left:295px;z-index:1000;display:flex;gap:6px;">
       <input id="search-input" type="text" placeholder="주소 또는 지명 검색..."
@@ -197,17 +223,85 @@
       </button>
     </div>
     <div id="map"></div>
-    <div id="layer-ctrl">
+    <!-- ── 패널 매니저 ── -->
+    <div id="panel-manager" style="position:absolute;top:10px;right:10px;z-index:1100;
+      background:#2b2b2b;border-radius:8px;overflow:hidden;width:220px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.5);user-select:none;">
+      <div id="pm-hd" style="background:#1a1a1a;color:#ccc;font-size:11px;font-weight:600;
+        padding:7px 12px;display:flex;align-items:center;justify-content:space-between;
+        cursor:move;border-bottom:1px solid #444;">
+        <span>⚙ 레이어 &amp; 패널</span>
+        <span id="pm-arrow" onclick="pmCollapse()" style="cursor:pointer;padding:0 4px;">▲</span>
+      </div>
+      <div id="pm-body">
+        <div style="display:flex;background:#222;border-bottom:1px solid #444;">
+          <div class="pm-tab active" id="pm-tab-layers" onclick="pmTab('layers')">레이어</div>
+          <div class="pm-tab" id="pm-tab-panels" onclick="pmTab('panels')">패널</div>
+          <div class="pm-tab" id="pm-tab-tools" onclick="pmTab('tools')">도구</div>
+        </div>
+        <!-- 레이어 탭 -->
+        <div id="pm-layers" class="pm-content active">
+          <div class="pm-sec">지도</div>
+          <div class="pm-row pm-sel" onclick="setLayer('satellite');pmSelRow(this)">
+            <span class="pm-eye on">👁</span><div class="pm-th" style="background:#1a6b3a;">🛰</div><span class="pm-nm">위성</span>
+          </div>
+          <div class="pm-row" onclick="setLayer('hybrid');pmSelRow(this)">
+            <span class="pm-eye on">👁</span><div class="pm-th" style="background:#1a4a6b;">🛰</div><span class="pm-nm">위성+도로명</span>
+          </div>
+          <div class="pm-row" onclick="setLayer('base');pmSelRow(this)">
+            <span class="pm-eye on">👁</span><div class="pm-th" style="background:#4a4a6b;">🗺</div><span class="pm-nm">일반지도</span>
+          </div>
+          <div class="pm-row" onclick="setLayer('mix');pmSelRow(this)">
+            <span class="pm-eye on">👁</span><div class="pm-th" style="background:#2a5a4a;">🗺</div><span class="pm-nm">위성+일반 혼합</span>
+          </div>
+          <div class="pm-sec">오버레이</div>
+          <div class="pm-row" id="pm-r-eco" onclick="pmToggleEco()">
+            <span class="pm-eye" id="pm-eco-eye">👁</span><div class="pm-th" style="background:#1a4a1a;">🌿</div>
+            <span class="pm-nm">생태자연도</span><span class="pm-badge" id="pm-eco-badge">OFF</span>
+          </div>
+          <div class="pm-row" id="pm-r-cnt" onclick="pmToggleCnt()">
+            <span class="pm-eye" id="pm-cnt-eye">👁</span><div class="pm-th" style="background:#3a3a5a;">📐</div>
+            <span class="pm-nm">등고선</span><span class="pm-badge" id="pm-cnt-badge">OFF</span>
+          </div>
+        </div>
+        <!-- 패널 탭 -->
+        <div id="pm-panels" class="pm-content">
+          <div class="pm-sec">패널 (클릭=열기)</div>
+          <div class="pm-row" onclick="pmOpen('criteria-panel')">
+            <span class="pm-eye on">⚡</span><div class="pm-th" style="background:#1e293b;">📋</div><span class="pm-nm">풍력터빈 설치기준</span>
+          </div>
+          <div class="pm-row" onclick="pmOpen('analyze-panel')">
+            <span class="pm-eye on">🖱</span><div class="pm-th" style="background:#1e3a5f;">📍</div><span class="pm-nm">클릭 지점 분석</span>
+          </div>
+          <div class="pm-row" onclick="pmOpen('ridge-panel')">
+            <span class="pm-eye on">🏔</span><div class="pm-th" style="background:#1a3a2a;">〰</div><span class="pm-nm">등고선·능선 검토</span>
+          </div>
+          <div class="pm-row" onclick="toggleDrawPanel()">
+            <span class="pm-eye on">🖌</span><div class="pm-th" style="background:#3a1a3a;">✏</div><span class="pm-nm">그림판</span>
+          </div>
+        </div>
+        <!-- 도구 탭 -->
+        <div id="pm-tools" class="pm-content">
+          <div class="pm-sec">도구</div>
+          <div class="pm-row" onclick="clearAllRidges()">
+            <span class="pm-eye">🗑</span><div class="pm-th" style="background:#5a1a1a;">❌</div><span class="pm-nm">능선 전체 삭제</span>
+          </div>
+          <div class="pm-row" onclick="typeof resetAnalysis==='function'&&resetAnalysis()">
+            <span class="pm-eye">↺</span><div class="pm-th" style="background:#1a3a5a;">🔄</div><span class="pm-nm">분석 초기화</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- layer-ctrl (hidden, 함수 참조용) -->
+    <div id="layer-ctrl" style="display:none;">
       <button class="active" onclick="setLayer('satellite')">🛰 위성</button>
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
       <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태등급 OFF</button>
-      <button onclick="alert('실제 능선 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.')" id="ridge-wms-btn" style="color:#94a3b8;">〰 능선 자동분석 미연결</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
-      <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
-      <button onclick="clearAllRidges()" style="color:#dc2626;">🗑 능선 전체 삭제</button>
-      <button onclick="toggleDrawPanel()" id="draw-btn" style="color:#7c3aed;border-top:1px solid #f1f5f9;">🖌 그림판</button>
+      <button onclick="toggleDrawPanel()" id="draw-btn">🖌 그림판</button>
     </div>
 
     <!-- 지도 위 그리기 캔버스 오버레이 (지도 영역 전체) -->
@@ -1452,6 +1546,100 @@ async function analyzeGeonCheonri(existTurbines){
     nwList.appendChild(el);
   });
 }
+
+// ── 패널 매니저 JS
+function pmCollapse(){
+  const b=document.getElementById('pm-body');
+  const a=document.getElementById('pm-arrow');
+  const open=b.style.display==='none';
+  b.style.display=open?'block':'none';
+  a.textContent=open?'▲':'▼';
+}
+function pmTab(name){
+  ['layers','panels','tools'].forEach(n=>{
+    const t=document.getElementById('pm-tab-'+n);
+    const c=document.getElementById('pm-'+n);
+    if(t) t.classList.toggle('active',n===name);
+    if(c) c.classList.toggle('active',n===name);
+  });
+}
+function pmSelRow(el){
+  document.querySelectorAll('#pm-layers .pm-row').forEach(r=>r.classList.remove('pm-sel'));
+  el.classList.add('pm-sel');
+}
+function pmToggleEco(){
+  toggleEco();
+  const on=ecoOn;
+  const eye=document.getElementById('pm-eco-eye');
+  const badge=document.getElementById('pm-eco-badge');
+  const row=document.getElementById('pm-r-eco');
+  if(eye) eye.classList.toggle('on',on);
+  if(badge){badge.textContent=on?'ON':'OFF';badge.classList.toggle('on',on);}
+  if(row) row.classList.toggle('pm-sel',on);
+}
+function pmToggleCnt(){
+  toggleContour();
+  const on=contourOn;
+  const eye=document.getElementById('pm-cnt-eye');
+  const badge=document.getElementById('pm-cnt-badge');
+  const row=document.getElementById('pm-r-cnt');
+  if(eye) eye.classList.toggle('on',on);
+  if(badge){badge.textContent=on?'ON':'OFF';badge.classList.toggle('on',on);}
+  if(row) row.classList.toggle('pm-sel',on);
+}
+function pmOpen(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.style.display='';
+  if(id==='draw-panel') el.classList.add('open');
+  const body=el.querySelector('.fp-body');
+  if(body) body.classList.remove('collapsed');
+  const btn=el.querySelector('.fp-collapse');
+  if(btn) btn.textContent='▼';
+  if(typeof bringToFront==='function') bringToFront(el);
+  if(!el.style.left){el.style.right='';el.style.bottom='';el.style.left='20px';el.style.top='80px';}
+}
+// 패널 매니저 드래그
+(function(){
+  const pm=document.getElementById('panel-manager');
+  const hd=document.getElementById('pm-hd');
+  if(!pm||!hd) return;
+  let drag=false,ox=0,oy=0,mx=0,my=0;
+  hd.addEventListener('mousedown',e=>{
+    if(e.target.id==='pm-arrow') return;
+    const r=pm.getBoundingClientRect(),wr=document.getElementById('map-wrap').getBoundingClientRect();
+    pm.style.right='';pm.style.top='';
+    pm.style.left=(r.left-wr.left)+'px';pm.style.top=(r.top-wr.top)+'px';
+    ox=pm.offsetLeft;oy=pm.offsetTop;mx=e.clientX;my=e.clientY;drag=true;e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{if(!drag)return;pm.style.left=Math.max(0,ox+(e.clientX-mx))+'px';pm.style.top=Math.max(0,oy+(e.clientY-my))+'px';});
+  document.addEventListener('mouseup',()=>{drag=false;});
+})();
+
+// ── 사이드바 리사이저
+(function(){
+  const sb=document.getElementById('sidebar');
+  const rz=document.getElementById('sidebar-resizer');
+  const bar=document.getElementById('search-bar');
+  if(!sb||!rz) return;
+  let drag=false,startX=0,startW=0;
+  rz.addEventListener('mousedown',e=>{
+    drag=true;startX=e.clientX;startW=sb.offsetWidth;
+    document.body.style.cursor='col-resize';document.body.style.userSelect='none';e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    const w=Math.min(520,Math.max(160,startW+(e.clientX-startX)));
+    sb.style.width=w+'px';
+    if(bar) bar.style.left=(w+8)+'px';
+    map&&map.invalidateSize();
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!drag) return;
+    drag=false;document.body.style.cursor='';document.body.style.userSelect='';
+    map&&map.invalidateSize();
+  });
+})();
 
 window.addEventListener('load', async ()=>{
   await fetchWind();
