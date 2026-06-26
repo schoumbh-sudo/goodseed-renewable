@@ -202,7 +202,7 @@
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
-      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태1등급지 OFF</button>
+      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태등급 OFF</button>
       <button onclick="alert('실제 능선 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.')" id="ridge-wms-btn" style="color:#94a3b8;">〰 능선 자동분석 미연결</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
       <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
@@ -836,7 +836,7 @@ async function fetchWind() {
   const PER=1000;
   const sb=document.getElementById('status-bar');
   try {
-    const r1=await fetch(`${API_BASE}?page=1&perPage=${PER}&serviceKey=${API_KEY}`);
+    const r1=await fetch(`${API_BASE}?page=1&perPage=${PER}&serviceKey=${encodeURIComponent(API_KEY)}`);
     if(!r1.ok) throw new Error(`HTTP ${r1.status}`);
     const d1=await r1.json();
     const total=d1.totalCount||0;
@@ -847,7 +847,7 @@ async function fetchWind() {
     if(pages>1){
       const jobs=[];
       for(let p=2;p<=pages;p++){
-        jobs.push(fetch(`${API_BASE}?page=${p}&perPage=${PER}&serviceKey=${API_KEY}`)
+        jobs.push(fetch(`${API_BASE}?page=${p}&perPage=${PER}&serviceKey=${encodeURIComponent(API_KEY)}`)
           .then(r=>r.json()).then(d=>(d.data||[]).forEach(addItem)));
       }
       await Promise.all(jobs);
@@ -1013,78 +1013,46 @@ function ecoFeatureToLatLngs(f){
 let ecoOn=false;
 let ecoPolygonLayers=[];
 
+// 생태등급 전체 표시: WFS 필터링 없이 WMS 타일 그대로 표시
+// 다른 기능은 건드리지 않고, 버튼 ON/OFF만 생태자연도 전체 레이어를 켜고 끔
 function toggleEco(){
   ecoOn=!ecoOn;
   const btn=document.getElementById('eco-btn');
+
   if(!ecoOn){
     ecoPolygonLayers.forEach(l=>map.removeLayer(l));
     ecoPolygonLayers=[];
-    btn.textContent='🌿 생태1등급지 OFF';
+    btn.textContent='🌿 생태등급 OFF';
     btn.style.color='#16a34a';
     btn.style.background='';
     return;
   }
-  btn.textContent='🌿 생태1등급지 로딩...';
-  btn.style.color='#d97706';
-  btn.style.background='#fefce8';
-  loadEco1Grade();
-}
 
-async function loadEco1Grade(){
-  const btn=document.getElementById('eco-btn');
-  // 기존 레이어 제거
+  // 기존 레이어 제거 후 생태자연도 전체 등급 WMS 표시
   ecoPolygonLayers.forEach(l=>map.removeLayer(l));
   ecoPolygonLayers=[];
 
-  const bounds=map.getBounds();
+  const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
+    serviceKey:API_KEY,
+    layers:'tbl_opn_eczm',
+    format:'image/png',
+    transparent:true,
+    version:'1.1.1',
+    srs:'EPSG:5186',
+    opacity:0.5,
+    attribution:'© 국립생태원 에코뱅크'
+  }).addTo(map);
 
-  try{
-    const features=await fetchEcoBank1Grade(
-      bounds.getWest(), bounds.getSouth(),
-      bounds.getEast(), bounds.getNorth(), 500);
-
-    if(features.length===0){
-      btn.textContent='🌿 생태1등급지 (해당 없음)';
-      btn.style.color='#16a34a';
-      btn.style.background='';
-      ecoOn=false;
-      return;
-    }
-
-    // 연두색 폴리곤으로 표시
-    features.forEach(f=>{
-      ecoFeatureToLatLngs(f).forEach(pts=>{
-        const poly=L.polygon(pts,{
-          color:'#65a30d', weight:1.5,
-          fillColor:'#84cc16', fillOpacity:0.4,
-          zIndexOffset:300
-        }).addTo(map).bindTooltip('🟢 생태자연도 1등급',{permanent:false,direction:'top'});
-        ecoPolygonLayers.push(poly);
-      });
-    });
-
-    btn.textContent=`🌿 생태1등급지 ON (${features.length}개)`;
-    btn.style.color='#dc2626';
-    btn.style.background='#f0fdf4';
-
-    // 지도 이동 시 자동 재조회
-    map.once('moveend',()=>{ if(ecoOn) loadEco1Grade(); });
-
-  }catch(e){
-    console.warn('에코뱅크 WFS 오류:', e.message);
-    // 실패 시 에코뱅크 WMS 타일로 대체(전 등급 표시, 시각 확인용)
-    const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
-      serviceKey:API_KEY, layers:'tbl_opn_eczm', format:'image/png',
-      transparent:true, version:'1.1.1', srs:'EPSG:5186', opacity:0.5,
-      attribution:'© 국립생태원 에코뱅크'
-    }).addTo(map);
-    ecoPolygonLayers.push(wms);
-    btn.textContent='🌿 생태1등급지 ON (WMS대체)';
-    btn.style.color='#dc2626';
-    btn.style.background='#f0fdf4';
-  }
+  ecoPolygonLayers.push(wms);
+  btn.textContent='🌿 생태등급 ON';
+  btn.style.color='#dc2626';
+  btn.style.background='#f0fdf4';
 }
 
+async function loadEco1Grade(){
+  // 기존 코드 호환용: 외부에서 호출되면 생태등급 레이어를 켬
+  if(!ecoOn) toggleEco();
+}
 async function loadEcoPolygons(){ await loadEco1Grade(); }
 
 // ── Vworld WMTS 능선+등고선 레이어 (CORS 없음)
