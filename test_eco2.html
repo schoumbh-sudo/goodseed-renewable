@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>생태자연도 API 테스트</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
+</head>
+<body>
+<h3>생태자연도 1등급 API 테스트</h3>
+<pre id="out">테스트 중...</pre>
+<script>
+const API_KEY='b02836e49fd4425e579a19da6bb135f7a1aa1a03f9fa9f0bd5c37a7bb4b98a62';
+const out=document.getElementById('out');
+const log=(m)=>{out.textContent+='\n'+m;};
+
+proj4.defs('EPSG:5186','+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +units=m +no_defs');
+
+const west=128.78, south=37.27, east=128.88, north=37.37;
+const sw=proj4('EPSG:4326','EPSG:5186',[west,south]);
+const ne=proj4('EPSG:4326','EPSG:5186',[east,north]);
+const bbox=`${Math.min(sw[0],ne[0])},${Math.min(sw[1],ne[1])},${Math.max(sw[0],ne[0])},${Math.max(sw[1],ne[1])},EPSG:5186`;
+log('bbox(5186): '+bbox);
+
+async function test1(){
+  log('\n[1] nie-ecobank.kr 프록시 (eczmGr=1)');
+  try{
+    const url=`/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS`+
+      `?serviceKey=${encodeURIComponent(API_KEY)}&typeName=tbl_opn_eczm`+
+      `&eczmGr=1&bbox=${encodeURIComponent(bbox)}&maxFeatures=3`+
+      `&outputFormat=${encodeURIComponent('application/json')}`;
+    log('URL: '+url.substring(0,120));
+    const r=await fetch(url);
+    log('status: '+r.status);
+    const t=await r.text();
+    log('응답: '+t.substring(0,400));
+  }catch(e){log('오류: '+e.message);}
+}
+
+async function test2(){
+  log('\n[2] nie-ecobank.kr 프록시 (필터없이)');
+  try{
+    const url=`/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS`+
+      `?serviceKey=${encodeURIComponent(API_KEY)}&typeName=tbl_opn_eczm`+
+      `&bbox=${encodeURIComponent(bbox)}&maxFeatures=3`+
+      `&outputFormat=${encodeURIComponent('application/json')}`;
+    const r=await fetch(url);
+    log('status: '+r.status);
+    const t=await r.text();
+    log('응답: '+t.substring(0,400));
+  }catch(e){log('오류: '+e.message);}
+}
+
+async function test3(){
+  log('\n[3] GetCapabilities 확인');
+  try{
+    const url=`/api/ecobank/EcologyzmpService/wfs/getEcologyzmpWFS?request=GetCapabilities&serviceKey=${encodeURIComponent(API_KEY)}`;
+    const r=await fetch(url);
+    log('status: '+r.status);
+    const t=await r.text();
+    log('응답: '+t.substring(0,200));
+  }catch(e){log('오류: '+e.message);}
+}
+
+log('=== 테스트 시작 (nie-ecobank.kr 프록시) ===');
+test1().then(test2).then(test3);
+</script>
+</body></html>
