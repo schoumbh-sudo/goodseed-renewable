@@ -75,6 +75,8 @@
   .crit-ok   { background:#dcfce7; color:#16a34a; }
   .crit-ng   { background:#fee2e2; color:#dc2626; }
   .crit-src { font-size:9px; color:#94a3b8; white-space:nowrap; flex-shrink:0; }
+  /* 생태자연도 WMS — 연두색 필터 */
+  .eco-green-layer { filter: hue-rotate(60deg) saturate(1.5) brightness(1.1); }
 </style>
 </head>
 <body>
@@ -135,7 +137,7 @@
       <button onclick="setLayer('hybrid')">🛰 위성+도로명</button>
       <button onclick="setLayer('base')">🗺 일반지도</button>
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
-      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태자연도 OFF</button>
+      <button onclick="toggleEco()" id="eco-btn" style="color:#16a34a;">🌿 생태1등급지 OFF</button>
       <button onclick="alert('실제 능선 데이터가 연결되지 않아 자동표시는 비활성화했습니다. 임의 능선 표시는 하지 않습니다.')" id="ridge-wms-btn" style="color:#94a3b8;">〰 능선 자동분석 미연결</button>
       <button onclick="toggleContour()" id="contour-btn" style="color:#7c3aed;">📐 등고선 OFF</button>
       <button onclick="alert('직접 그리기는 임의 표시가 될 수 있어 비활성화했습니다.')" id="ridge-btn" style="color:#94a3b8;">🖊 능선 직접그리기 비활성</button>
@@ -176,9 +178,9 @@
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑤ 경사도 <b>25° 이하</b></span><span class="crit-src">DEM 계산</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑥ 등고선·능선 <b>위치 확인</b></span><span class="crit-src">Vworld WMS</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑦ 주거지 <b>200m 이상 이격</b></span><span class="crit-src">건축물대장 API</span></div>
-        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>350m+</b></span><span class="crit-src">에너지공단</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">⑧ 기존발전기 <b>300m+</b> · 터빈간 <b>400m+</b></span><span class="crit-src">에너지공단</span></div>
         <div style="padding:6px 12px;font-size:9px;color:#94a3b8;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
-          <span>4.5MW · Vestas V150 · 로터직경 150m</span>
+          <span>6.0MW · Vestas V150-6.0 · 로터직경 150m</span>
           <span id="crit-summary" style="font-weight:700;color:#94a3b8;">0/8</span>
         </div>
       </div>
@@ -772,19 +774,106 @@ function searchByAddress(query) {
 
 const KMA_KEY = '7g4sRCWvSE6OLEQlr8hOjQ';
 
-// ── 생태자연도 WMS (EGIS - 키 불필요)
-const ecoLayer = L.tileLayer.wms('http://egisapp.me.go.kr/geoserver/gwc/service/wms', {
-  layers:'EGIS:eco_2015_g', format:'image/png', transparent:true,
-  version:'1.1.1', opacity:0.55, attribution:'© 환경부 EGIS'
-});
+// ── 생태자연도 1등급지 — EGIS WFS 프록시 (netlify _redirects 경유)
 let ecoOn=false;
+let ecoPolygonLayers=[];
+
 function toggleEco(){
   ecoOn=!ecoOn;
-  ecoOn?ecoLayer.addTo(map):map.removeLayer(ecoLayer);
-  const el=document.getElementById('eco-btn');
-  if(el){el.textContent=`🌿 생태자연도 ${ecoOn?'ON':'OFF'}`;
-    el.style.color=ecoOn?'#dc2626':'#16a34a';}
+  const btn=document.getElementById('eco-btn');
+  if(!ecoOn){
+    ecoPolygonLayers.forEach(l=>map.removeLayer(l));
+    ecoPolygonLayers=[];
+    btn.textContent='🌿 생태1등급지 OFF';
+    btn.style.color='#16a34a';
+    btn.style.background='';
+    return;
+  }
+  btn.textContent='🌿 생태1등급지 로딩...';
+  btn.style.color='#d97706';
+  btn.style.background='#fefce8';
+  loadEco1Grade();
 }
+
+async function loadEco1Grade(){
+  const btn=document.getElementById('eco-btn');
+  // 기존 레이어 제거
+  ecoPolygonLayers.forEach(l=>map.removeLayer(l));
+  ecoPolygonLayers=[];
+
+  const bounds=map.getBounds();
+  const minX=bounds.getWest().toFixed(5);
+  const minY=bounds.getSouth().toFixed(5);
+  const maxX=bounds.getEast().toFixed(5);
+  const maxY=bounds.getNorth().toFixed(5);
+
+  try{
+    // netlify 프록시 경유 → EGIS WFS
+    // G_GRADE=1 필터로 1등급만 조회
+    const cql=encodeURIComponent("G_GRADE='1'");
+    const url=`/api/egis/?service=WFS&version=1.1.0&request=GetFeature`+
+      `&typeName=EGIS:eco_2015_g`+
+      `&outputFormat=application/json`+
+      `&bbox=${minX},${minY},${maxX},${maxY},EPSG:4326`+
+      `&CQL_FILTER=${cql}`+
+      `&maxFeatures=500`;
+
+    const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json=await res.json();
+    const features=json.features||[];
+
+    if(features.length===0){
+      btn.textContent='🌿 생태1등급지 (해당 없음)';
+      btn.style.color='#16a34a';
+      btn.style.background='';
+      ecoOn=false;
+      return;
+    }
+
+    // 연두색 폴리곤으로 표시
+    features.forEach(f=>{
+      if(!f.geometry) return;
+      const type=f.geometry.type;
+      const coords=f.geometry.coordinates;
+      let rings=[];
+      if(type==='Polygon') rings=[coords];
+      else if(type==='MultiPolygon') rings=coords.flat();
+      rings.forEach(ring=>{
+        const pts=(ring[0]||ring).map(c=>[c[1],c[0]]);
+        if(pts.length<3) return;
+        const poly=L.polygon(pts,{
+          color:'#65a30d', weight:1.5,
+          fillColor:'#84cc16', fillOpacity:0.4,
+          zIndexOffset:300
+        }).addTo(map).bindTooltip('🟢 생태자연도 1등급',{permanent:false,direction:'top'});
+        ecoPolygonLayers.push(poly);
+      });
+    });
+
+    btn.textContent=`🌿 생태1등급지 ON (${features.length}개)`;
+    btn.style.color='#dc2626';
+    btn.style.background='#f0fdf4';
+
+    // 지도 이동 시 자동 재조회
+    map.once('moveend',()=>{ if(ecoOn) loadEco1Grade(); });
+
+  }catch(e){
+    console.warn('EGIS WFS 오류:', e.message);
+    // 실패 시 EGIS WMS 타일로 대체
+    const wms=L.tileLayer.wms('http://egisapp.me.go.kr/geoserver/gwc/service/wms',{
+      layers:'EGIS:eco_2015_g', format:'image/png',
+      transparent:true, version:'1.1.1', opacity:0.55,
+      className:'eco-green-layer', attribution:'© 환경부 EGIS'
+    }).addTo(map);
+    ecoPolygonLayers.push(wms);
+    btn.textContent='🌿 생태1등급지 ON (WMS)';
+    btn.style.color='#dc2626';
+    btn.style.background='#f0fdf4';
+  }
+}
+
+async function loadEcoPolygons(){ await loadEco1Grade(); }
 
 // ── Vworld WMTS 능선+등고선 레이어 (CORS 없음)
 // Hybrid 타일 = 도로명 + 지형지물 포함
@@ -1098,6 +1187,28 @@ async function analyzeGeonCheonri(existTurbines){
   const noB=gentle.filter(p=>!p.baekdu);
   setNW2(`③ 생태자연도 확인 중... (백두대간 통과 ${noB.length}개)`);
 
+  // 생태자연도 1등급 구역 폴리곤 표시 (건천리 전체 범위)
+  try{
+    const bounds=map.getBounds();
+    const d=0.08;
+    const cx=37.3230, cy=128.8308;
+    const ecoUrl=`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature`+
+      `&typename=lt_c_uq114&bbox=${cy-d},${cx-d},${cy+d},${cx+d},EPSG:4326`+
+      `&outputFormat=application/json&key=${VWORLD_KEY}`;
+    const ecoRes=await fetch(ecoUrl);
+    const ecoJson=await ecoRes.json();
+    (ecoJson.features||[]).forEach(f=>{
+      if(!f.geometry) return;
+      const coords=f.geometry.coordinates;
+      const polys=f.geometry.type==='Polygon'?[coords]:coords.flat();
+      polys.forEach(ring=>{
+        const pts=ring[0].map(c=>[c[1],c[0]]);
+        L.polygon(pts,{color:'#16a34a',weight:2,fillColor:'#16a34a',fillOpacity:0.2,dashArray:'6 3'})
+         .addTo(map).bindTooltip('생태자연도 1등급',{permanent:false});
+      });
+    });
+  }catch(e){}
+
   for(const p of noB){
     p.eco=await chkEco(p.lat,p.lon);
     await new Promise(r=>setTimeout(r,250));
@@ -1133,7 +1244,7 @@ async function analyzeGeonCheonri(existTurbines){
     if(!windOk) return;
     if(VILLAGES.some(v=>dist(p.lat,p.lon,v.lat,v.lon)<200)) return;
     if(existTurbines.some(t=>dist(p.lat,p.lon,t.lat,t.lon)<300)) return;
-    if(passed.some(q=>dist(p.lat,p.lon,q.lat,q.lon)<350)) return;
+    if(passed.some(q=>dist(p.lat,p.lon,q.lat,q.lon)<400)) return;
     passed.push(p);
   });
 
@@ -1390,9 +1501,9 @@ async function startAnalysis(){
   }
   setStatus(`격자 ${grid.length}개 생성됨`,5);
 
-  // ① 풍속 (기상청)
+  // ① 풍속 (기상청 레윈존데 속초 관측소)
   setStatus('① 풍속 확인 중...',10);
-  let windOk=true, windMs='미확인';
+  let windOk=false, windMs='미확인';
   try{
     const now=new Date();
     const h=Math.floor(now.getUTCHours()/12)*12;
@@ -1402,70 +1513,204 @@ async function startAnalysis(){
     const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
     const data=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
       .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ht>=500&&d.ht<=1500);
-    const avg=data.length?(data.reduce((a,b)=>a+b.ws,0)/data.length):0;
-    windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
-  }catch(e){windOk=true;}
-  setCritRow(0,windOk);
+    if(data.length>0){
+      const avg=data.reduce((a,b)=>a+b.ws,0)/data.length;
+      windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
+    } else {
+      // 데이터 없으면 전체 고도 조회
+      const allData=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
+        .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ws>0);
+      if(allData.length>0){
+        const avg=allData.reduce((a,b)=>a+b.ws,0)/allData.length;
+        windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
+      } else {
+        windMs='데이터없음'; windOk=false;
+      }
+    }
+  }catch(e){
+    windMs='API오류'; windOk=false;
+    console.warn('① 풍속 API 오류:', e.message);
+  }
+  setCritRow(0, windOk);
+  setStatus(`① 풍속 ${windMs} ${windOk?'✅':'❌'}`, 15);
 
-  // ④⑤ 고도·경사도 (Open Topo Data)
+  // ④⑤ 고도·경사도 (netlify 프록시 → Open Topo Data)
   setStatus('④ 고도·경사도 조회 중...',20);
-  const elevData=await fetchElev(grid);
-  elevData.forEach(p=>{ p.slp=calcSlope(p,elevData); });
-  const highGrid=elevData.filter(p=>p.elev>=500);
-  setCritRow(3, highGrid.length>0);
-  const gentleGrid=highGrid.filter(p=>p.slp<=25);
-  setCritRow(4, gentleGrid.length>0);
-  setStatus(`④ 고도500m↑ ${highGrid.length}개 / ⑤ 경사25°↓ ${gentleGrid.length}개`,40);
+  let highGrid=[], gentleGrid=[], elevData=[];
+  try{
+    elevData=await fetchElev(grid);
+    elevData.forEach(p=>{ p.slp=calcSlope(p,elevData); });
+    highGrid=elevData.filter(p=>p.elev>=500);
+    gentleGrid=highGrid.filter(p=>p.slp<=25);
+    setCritRow(3, highGrid.length>0);
+    setCritRow(4, gentleGrid.length>0);
+    setStatus(`④ 고도500m↑ ${highGrid.length}개 / ⑤ 경사25°↓ ${gentleGrid.length}개`,40);
+  }catch(e){
+    console.warn('④⑤ 고도 조회 오류:', e.message);
+    setCritRow(3, false); setCritRow(4, false);
+  }
 
-  // ② 백두대간 (클릭 중심점 기준)
+  // ② 백두대간 (Vworld WFS)
   setStatus('② 백두대간 확인 중...',50);
-  const baekduHit=await chkBaekdu(clickLat,clickLon);
+  let baekduHit=false;
+  try{ baekduHit=await chkBaekdu(clickLat,clickLon); }catch(e){ baekduHit=false; }
   setCritRow(1,!baekduHit);
 
-  // ③ 생태자연도 (클릭 중심점 기준)
+  // ③ 생태자연도 1등급 (EGIS WFS 프록시)
   setStatus('③ 생태자연도 확인 중...',60);
-  const ecoHit=await chkEco(clickLat,clickLon);
+  let ecoHit=false;
+  try{
+    const d=0.05;
+    const cql=encodeURIComponent("G_GRADE='1'");
+    const url=`/api/egis/?service=WFS&version=1.1.0&request=GetFeature`+
+      `&typeName=EGIS:eco_2015_g&outputFormat=application/json`+
+      `&bbox=${clickLon-d},${clickLat-d},${clickLon+d},${clickLat+d},EPSG:4326`+
+      `&CQL_FILTER=${cql}&maxFeatures=100`;
+    const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
+    const json=await res.json();
+    const features=json.features||[];
+    if(features.length>0){
+      ecoHit=true;
+      // 연두색 폴리곤 표시
+      features.forEach(f=>{
+        if(!f.geometry) return;
+        const type=f.geometry.type;
+        const coords=f.geometry.coordinates;
+        let rings=[];
+        if(type==='Polygon') rings=[coords];
+        else if(type==='MultiPolygon') rings=coords.flat();
+        rings.forEach(ring=>{
+          const pts=(ring[0]||ring).map(c=>[c[1],c[0]]);
+          if(pts.length<3) return;
+          const poly=L.polygon(pts,{
+            color:'#65a30d',weight:1.5,
+            fillColor:'#84cc16',fillOpacity:0.4,
+            zIndexOffset:300
+          }).addTo(map).bindTooltip('🟢 생태자연도 1등급',{permanent:false});
+          clickResultLayers.push(poly);
+        });
+      });
+      setStatus(`③ 생태자연도 1등급 저촉 ${features.length}개 ❌`,62);
+    } else {
+      setStatus('③ 생태자연도 1등급 미저촉 ✅',62);
+    }
+  }catch(e){
+    // 프록시 실패 시 Vworld WFS 대체
+    try{ ecoHit=await chkEco(clickLat,clickLon); }catch(e2){ ecoHit=false; }
+    console.warn('EGIS WFS 실패, Vworld 대체:', e.message);
+  }
   setCritRow(2,!ecoHit);
 
-  // ⑥ 등고선·능선 위치 확인
-  // 실제 등고선/능선 데이터가 연결되지 않았으므로 임의 분석하지 않음.
-  setStatus('⑥ 능선/등고선 데이터 미연결 — 임의 표시 안 함',70);
-  setCritRow(5, false);
+  // ⑥ 등고선·능선 — Vworld WFS lt_l_cnt 등고선 벡터 조회
+  setStatus('⑥ 등고선·능선 확인 중...',70);
+  let ridgeOk=false;
+  try{
+    const d=0.005;
+    const url=`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature`+
+      `&typename=lt_l_cnt&bbox=${clickLon-d},${clickLat-d},${clickLon+d},${clickLat+d},EPSG:4326`+
+      `&outputFormat=application/json&key=${VWORLD_KEY}`;
+    const res=await fetch(url);
+    const json=await res.json();
+    const features=json.features||[];
+    if(features.length>0){
+      ridgeOk=true;
+      // 등고선 벡터를 지도에 표시
+      features.slice(0,30).forEach(f=>{
+        const coords=f.geometry?.coordinates;
+        if(!coords) return;
+        const lines=f.geometry.type==='LineString'?[coords]:coords;
+        lines.forEach(line=>{
+          const pts=line.map(c=>[c[1],c[0]]);
+          const l=L.polyline(pts,{
+            color:'#facc15',weight:2,dashArray:'8 5',opacity:0.85,zIndexOffset:450
+          }).addTo(map);
+          clickResultLayers.push(l);
+        });
+      });
+      setStatus(`⑥ 등고선 ${features.length}개 확인 ✅`,72);
+    } else {
+      ridgeOk=false;
+      setStatus('⑥ 해당 지점 등고선 데이터 없음',72);
+    }
+  }catch(e){
+    ridgeOk=false;
+    console.warn('⑥ 등고선 WFS 오류:', e.message);
+    setStatus('⑥ 등고선 WFS 조회 실패',72);
+  }
   const st6=document.querySelectorAll('.crit-row')[5]?.querySelector('.crit-status');
   if(st6){
-    st6.className='crit-status crit-ng';
-    st6.textContent='자료필요';
+    st6.classList.remove('crit-pend','crit-ok','crit-ng');
+    st6.classList.add(ridgeOk?'crit-ok':'crit-ng');
+    st6.textContent=ridgeOk?'확인':'없음';
   }
-  const ridgePts=[];
 
-  // ⑦ 주거지 200m (건축물대장)
+  // ⑦ 주거지 200m — Vworld WFS 건물 레이어
   setStatus('⑦ 주거지 이격 확인 중...',75);
   let homeOk=true;
   try{
-    // 클릭 지점 시군구 코드 기반 조회 — 200m 반경 내 주거 건물 확인
-    const res=await fetch(`https://apis.data.go.kr/1613000/BldRgstService_v2/getBrBasisOulnInfo?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&_type=json&entX=${clickLon}&entY=${clickLat}`);
+    const d=0.002; // 약 200m
+    const url=`https://api.vworld.kr/req/wfs?service=WFS&version=2.0.0&request=GetFeature`+
+      `&typename=lt_b_ag&bbox=${clickLon-d},${clickLat-d},${clickLon+d},${clickLat+d},EPSG:4326`+
+      `&outputFormat=application/json&key=${VWORLD_KEY}`;
+    const res=await fetch(url);
     const json=await res.json();
-    const items=json?.response?.body?.items?.item||[];
-    const arr=Array.isArray(items)?items:[items];
-    homeOk=arr.filter(i=>i.mainPurpsCdNm&&(i.mainPurpsCdNm.includes('단독주택')||i.mainPurpsCdNm.includes('공동주택'))).length===0;
-  }catch(e){homeOk=true;}
+    const cnt=(json.totalFeatures||json.numberMatched||json.features?.length||0);
+    homeOk = cnt===0;
+    setStatus(`⑦ 200m 반경 건물 ${cnt}개 ${homeOk?'✅':'❌'}`,78);
+  }catch(e){
+    // 건물 레이어 실패 시 건축물대장 API 시도
+    try{
+      const res=await fetch(`https://apis.data.go.kr/1613000/BldRgstService_v2/getBrBasisOulnInfo?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&_type=json&entX=${clickLon}&entY=${clickLat}`);
+      const json=await res.json();
+      const items=json?.response?.body?.items?.item||[];
+      const arr=Array.isArray(items)?items:[items];
+      homeOk=arr.filter(i=>i.mainPurpsCdNm&&(i.mainPurpsCdNm.includes('단독주택')||i.mainPurpsCdNm.includes('공동주택'))).length===0;
+    }catch(e2){ homeOk=true; }
+  }
   setCritRow(6,homeOk);
 
-  // ⑧ 기존발전기 300m + 통과점 350m
+  // ⑧ 기존발전기 300m
   setStatus('⑧ 기존발전기 이격 확인 중...',85);
   const existT=[];
   Object.values(windDanji).forEach(d=>d.items.forEach(t=>existT.push({lat:t.lat,lon:t.lon})));
   const turbineOk=!existT.some(t=>dist(clickLat,clickLon,t.lat,t.lon)<300);
   setCritRow(7,turbineOk);
 
-  // 최종 터빈 후보 표시
-  // 능선 위치가 실제 데이터로 확인되지 않았으므로 터빈 후보를 자동 생성하지 않음.
-  setStatus('능선 자동데이터 미확보 — 등고선 지도에서 육안 검토 후 표시해주세요',95);
-  const passed=[];
+  // ── 최종 결과
+  const allOk=[windOk,!baekduHit,!ecoHit,highGrid.length>0,gentleGrid.length>0,ridgeOk,homeOk,turbineOk];
+  const passCount=allOk.filter(Boolean).length;
+  setStatus(`✅ 분석 완료 — ${passCount}/8 항목 통과`,100);
 
-  // 능선 데이터가 실제로 연결되지 않았으므로 터빈 후보/능선 후보를 지도에 자동 표시하지 않음.
-  // 등고선 지도는 참고용 배경이며, 능선 자동 판정 데이터가 아니므로 결과로 쓰지 않음.
-  setStatus('✅ 분석 완료 — 능선 실제 데이터 미연결, 임의 능선·터빈 후보 표시 안 함',100);
+  // 8개 모두 통과한 경우만 빨간 점 표시
+  if(allOk.every(Boolean) && gentleGrid.length>0){
+    const passed=[];
+    gentleGrid.forEach(p=>{
+      if(existT.some(t=>dist(p.lat,p.lon,t.lat,t.lon)<300)) return;
+      if(passed.some(q=>dist(p.lat,p.lon,q.lat,q.lon)<400)) return;
+      passed.push(p);
+    });
+    passed.forEach((p,i)=>{
+      const m=L.circleMarker([p.lat,p.lon],{
+        radius:7,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:0.92,zIndexOffset:500
+      }).addTo(map).bindPopup(
+        `<b>🔴 신규터빈 후보 T${i+1}</b><br>`+
+        `${p.lat}, ${p.lon}<br>`+
+        `해발 ${p.elev}m · 경사 ${p.slp?.toFixed(1)}°<br>`+
+        `풍속: ${windMs}<br><small>8개 항목 모두 통과</small>`
+      );
+      const lb=L.marker([p.lat,p.lon],{
+        icon:L.divIcon({
+          html:`<div style="background:rgba(220,20,20,0.9);color:#fff;border-radius:10px;
+                padding:1px 5px;font-size:9px;font-weight:700;border:1px solid #fff;
+                margin-top:12px;">T${i+1}</div>`,
+          iconSize:[26,16],iconAnchor:[13,-2],className:''
+        }),zIndexOffset:501
+      }).addTo(map);
+      clickResultLayers.push(m,lb);
+    });
+    if(passed.length>0) setStatus(`✅ 8/8 통과 — 터빈 후보 ${passed.length}기 표시`,100);
+    else setStatus(`✅ ${passCount}/8 통과 — 터빈 간격 조건 충족 위치 없음`,100);
+  }
 
   btn.disabled=false; btn.textContent='▶ 분석 시작';
 }

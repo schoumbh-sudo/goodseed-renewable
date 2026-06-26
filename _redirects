@@ -1,1 +1,2 @@
 /api/elevation/*  https://api.opentopodata.org/v1/:splat  200
+/api/egis/*  http://egisapp.me.go.kr/geoserver/wfs/:splat  200
