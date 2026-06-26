@@ -836,7 +836,7 @@ async function fetchWind() {
   const PER=1000;
   const sb=document.getElementById('status-bar');
   try {
-    const r1=await fetch(`${API_BASE}?page=1&perPage=${PER}&serviceKey=${encodeURIComponent(API_KEY)}`);
+    const r1=await fetch(`${API_BASE}?page=1&perPage=${PER}&serviceKey=${API_KEY}`);
     if(!r1.ok) throw new Error(`HTTP ${r1.status}`);
     const d1=await r1.json();
     const total=d1.totalCount||0;
@@ -847,7 +847,7 @@ async function fetchWind() {
     if(pages>1){
       const jobs=[];
       for(let p=2;p<=pages;p++){
-        jobs.push(fetch(`${API_BASE}?page=${p}&perPage=${PER}&serviceKey=${encodeURIComponent(API_KEY)}`)
+        jobs.push(fetch(`${API_BASE}?page=${p}&perPage=${PER}&serviceKey=${API_KEY}`)
           .then(r=>r.json()).then(d=>(d.data||[]).forEach(addItem)));
       }
       await Promise.all(jobs);
@@ -1013,12 +1013,11 @@ function ecoFeatureToLatLngs(f){
 let ecoOn=false;
 let ecoPolygonLayers=[];
 
-// 생태등급 전체 표시: WFS 필터링 없이 WMS 타일 그대로 표시
-// 다른 기능은 건드리지 않고, 버튼 ON/OFF만 생태자연도 전체 레이어를 켜고 끔
 function toggleEco(){
   ecoOn=!ecoOn;
   const btn=document.getElementById('eco-btn');
 
+  // OFF: 생태등급 레이어만 제거, 다른 기능은 건드리지 않음
   if(!ecoOn){
     ecoPolygonLayers.forEach(l=>map.removeLayer(l));
     ecoPolygonLayers=[];
@@ -1028,7 +1027,8 @@ function toggleEco(){
     return;
   }
 
-  // 기존 레이어 제거 후 생태자연도 전체 등급 WMS 표시
+  // ON: 생태자연도 전체 등급 WMS 표시
+  // 1등급 필터(eczmGr=1)는 버튼 표시용에서는 사용하지 않음
   ecoPolygonLayers.forEach(l=>map.removeLayer(l));
   ecoPolygonLayers=[];
 
@@ -1039,20 +1039,30 @@ function toggleEco(){
     transparent:true,
     version:'1.1.1',
     srs:'EPSG:5186',
-    opacity:0.5,
+    opacity:0.55,
     attribution:'© 국립생태원 에코뱅크'
-  }).addTo(map);
+  });
 
+  wms.on('tileerror', function(e){
+    console.warn('생태등급 WMS 타일 오류:', e);
+    btn.textContent='🌿 생태등급 오류(WMS)';
+    btn.style.color='#dc2626';
+    btn.style.background='#fef2f2';
+  });
+
+  wms.addTo(map);
   ecoPolygonLayers.push(wms);
+
   btn.textContent='🌿 생태등급 ON';
   btn.style.color='#dc2626';
   btn.style.background='#f0fdf4';
 }
 
+// 기존 코드 호환용: 외부에서 호출되면 생태등급 전체 레이어를 켬
 async function loadEco1Grade(){
-  // 기존 코드 호환용: 외부에서 호출되면 생태등급 레이어를 켬
   if(!ecoOn) toggleEco();
 }
+
 async function loadEcoPolygons(){ await loadEco1Grade(); }
 
 // ── Vworld WMTS 능선+등고선 레이어 (CORS 없음)
