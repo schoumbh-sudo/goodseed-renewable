@@ -1013,13 +1013,14 @@ function ecoFeatureToLatLngs(f){
 let ecoOn=false;
 let ecoPolygonLayers=[];
 
+// 생태등급 표시: WFS 조회(해당 없음 표시) 없이 WMS 전체 생태자연도만 표시
+// 다른 기능은 건드리지 않음. 버튼 ON/OFF 시 WMS 타일만 추가/제거.
 function toggleEco(){
   ecoOn=!ecoOn;
   const btn=document.getElementById('eco-btn');
 
-  // OFF: 생태등급 레이어만 제거, 다른 기능은 건드리지 않음
   if(!ecoOn){
-    ecoPolygonLayers.forEach(l=>map.removeLayer(l));
+    ecoPolygonLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
     ecoPolygonLayers=[];
     btn.textContent='🌿 생태등급 OFF';
     btn.style.color='#16a34a';
@@ -1027,40 +1028,44 @@ function toggleEco(){
     return;
   }
 
-  // ON: 생태자연도 전체 등급 WMS 표시
-  // 1등급 필터(eczmGr=1)는 버튼 표시용에서는 사용하지 않음
-  ecoPolygonLayers.forEach(l=>map.removeLayer(l));
-  ecoPolygonLayers=[];
-
-  const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
-    serviceKey:API_KEY,
-    layers:'tbl_opn_eczm',
-    format:'image/png',
-    transparent:true,
-    version:'1.1.1',
-    srs:'EPSG:5186',
-    opacity:0.55,
-    attribution:'© 국립생태원 에코뱅크'
-  });
-
-  wms.on('tileerror', function(e){
-    console.warn('생태등급 WMS 타일 오류:', e);
-    btn.textContent='🌿 생태등급 오류(WMS)';
-    btn.style.color='#dc2626';
-    btn.style.background='#fef2f2';
-  });
-
-  wms.addTo(map);
-  ecoPolygonLayers.push(wms);
-
   btn.textContent='🌿 생태등급 ON';
   btn.style.color='#dc2626';
   btn.style.background='#f0fdf4';
+  loadEco1Grade();
 }
 
-// 기존 코드 호환용: 외부에서 호출되면 생태등급 전체 레이어를 켬
 async function loadEco1Grade(){
-  if(!ecoOn) toggleEco();
+  const btn=document.getElementById('eco-btn');
+
+  // 기존 생태등급 레이어 제거
+  ecoPolygonLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
+  ecoPolygonLayers=[];
+
+  try{
+    // 에코뱅크 생태자연도 WMS 전체 등급 표시
+    // crs를 EPSG:4326으로 지정해서 Leaflet이 4326 BBOX로 요청하게 함
+    const wms=L.tileLayer.wms('/api/ecobank/EcologyzmpService/wms/getEcologyzmpWMS',{
+      serviceKey:API_KEY,
+      layers:'tbl_opn_eczm',
+      styles:'',
+      format:'image/png',
+      transparent:true,
+      version:'1.1.1',
+      crs:L.CRS.EPSG4326,
+      opacity:0.55,
+      attribution:'© 국립생태원 에코뱅크'
+    }).addTo(map);
+
+    ecoPolygonLayers.push(wms);
+    btn.textContent='🌿 생태등급 ON';
+    btn.style.color='#dc2626';
+    btn.style.background='#f0fdf4';
+  }catch(e){
+    console.warn('생태등급 WMS 오류:', e.message);
+    btn.textContent='🌿 생태등급 오류';
+    btn.style.color='#dc2626';
+    btn.style.background='#fee2e2';
+  }
 }
 
 async function loadEcoPolygons(){ await loadEco1Grade(); }
