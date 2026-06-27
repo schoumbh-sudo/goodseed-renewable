@@ -73,7 +73,7 @@
   .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .leg-sq  { width: 12px; height: 8px; border-radius: 1px; flex-shrink: 0; }
   .crit-row { padding:5px 12px; font-size:11px; color:#334155; border-bottom:1px solid #f8fafc;
-    display:flex; align-items:center; gap:6px; cursor:pointer; transition:background 0.1s; }
+    display:flex; align-items:center; gap:6px; cursor:default; transition:background 0.1s; }
   .crit-row:hover { background:#f1f5f9; }
   .crit-row:last-of-type { border-bottom:none; }
   .crit-label { flex:1; text-align:left; }
@@ -202,6 +202,16 @@
         </div>
       </div>
     </div>
+    <!-- 분석 결과 저장 섹션 -->
+    <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;padding-right:8px;">
+      <span>📊 분석 결과 저장</span>
+      <button onclick="showAddSavedDialog()"
+        style="font-size:14px;background:none;border:none;cursor:pointer;color:#0ea5e9;
+        line-height:1;padding:0 2px;" title="결과 추가">＋</button>
+    </div>
+    <div id="sidebar-saved-list">
+      <div style="padding:8px 14px;font-size:10px;color:#94a3b8;">저장된 결과 없음</div>
+    </div>
     <div class="sec-title">💨 풍력발전단지 실제 위치</div>
     <div id="status-bar" class="s-loading">⏳ 에너지공단 API 호출 중...</div>
     <div id="wind-list"></div>
@@ -265,6 +275,11 @@
             <span class="pm-name">생태자연도</span>
             <span class="pm-badge" id="pm-eco-badge">OFF</span>
           </div>
+          <div class="pm-row" id="pm-r-baekdu" onclick="pmToggleBaekdu()">
+            <span class="pm-eye" id="pm-baekdu-eye">👁</span><div class="pm-thumb" style="background:#3a1a4a;">🏔</div>
+            <span class="pm-name">백두대간 보호구역</span>
+            <span class="pm-badge" id="pm-baekdu-badge">OFF</span>
+          </div>
           <div class="pm-row" id="pm-r-cnt" onclick="pmToggleCnt()">
             <span class="pm-eye" id="pm-cnt-eye">👁</span><div class="pm-thumb" style="background:#3a3a5a;">📐</div>
             <span class="pm-name">등고선</span>
@@ -283,6 +298,7 @@
             <span class="pm-eye on">🖱</span><div class="pm-thumb" style="background:#1e3a5f;">📍</div>
             <span class="pm-name">클릭 지점 분석</span>
           </div>
+
           <div class="pm-row" onclick="pmOpenPanel('ridge-panel')">
             <span class="pm-eye on">🏔</span><div class="pm-thumb" style="background:#1a3a2a;">〰</div>
             <span class="pm-name">등고선·능선 검토</span>
@@ -424,6 +440,7 @@
       <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;"></div><span>풍력발전기 (실제)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
       <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 200m 기준</span></div>
+      <div class="leg-row"><div class="leg-sq" style="background:rgba(130,60,180,0.35);border:2px solid #7c3aed;"></div><span>백두대간 보호구역</span></div>
       <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span></div>
     </div>
     <div id="criteria-panel" class="fp" style="bottom:60px;left:295px;">
@@ -508,6 +525,13 @@
           <div id="analyze-progress" style="height:3px;background:#f1f5f9;border-radius:2px;margin-top:4px;display:none;">
             <div id="analyze-bar" style="height:100%;background:#0ea5e9;border-radius:2px;width:0%;transition:width 0.3s;"></div>
           </div>
+          <!-- 결과 보기 버튼 -->
+          <button id="show-result-btn" onclick="openResultModal()"
+            style="display:none;width:100%;margin-top:10px;padding:8px;font-size:11px;font-weight:700;
+            background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;border:none;border-radius:6px;
+            cursor:pointer;letter-spacing:0.3px;">
+            📊 분석 결과 보기
+          </button>
         </div>
       </div>
     </div>
@@ -1110,7 +1134,8 @@ function ecoFeatureToLatLngs(f){
   else if(type==='MultiPolygon') rings=coords.flat();
   // 각 ring을 위경도로 변환
   return rings.map(ring=>{
-    const outer=ring[0]||ring;
+    // ring[0]이 배열이면 외부링, 아니면 ring 자체가 좌표 배열
+    const outer=Array.isArray(ring[0][0]) ? ring[0] : ring;
     return outer.map(c=>{
       const ll=from5186(c[0],c[1]); // [lon,lat]
       return [ll[1],ll[0]];          // Leaflet [lat,lon]
@@ -1306,6 +1331,41 @@ function pmSelRow(el){
   document.querySelectorAll('#pm-layers .pm-row').forEach(r=>r.classList.remove('pm-selected'));
   el.classList.add('pm-selected');
 }
+// ── 백두대간 WMS 레이어
+let baekduOn = false;
+let baekduLayers = [];
+
+function toggleBaekdu(){
+  baekduOn = !baekduOn;
+  if(!baekduOn){
+    baekduLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
+    baekduLayers = [];
+    return;
+  }
+  // Vworld WMS lt_c_uq111 (백두대간 보호구역)
+  const wms = L.tileLayer.wms(
+    `/api/vworld/wms?key=${VWORLD_KEY}&`,{
+    layers:'lt_c_uq111',
+    format:'image/png',
+    transparent:true,
+    version:'1.3.0',
+    opacity:0.55,
+    attribution:'© Vworld 백두대간'
+  });
+  wms.addTo(map);
+  baekduLayers.push(wms);
+}
+
+function pmToggleBaekdu(){
+  toggleBaekdu();
+  const eye   = document.getElementById('pm-baekdu-eye');
+  const badge = document.getElementById('pm-baekdu-badge');
+  const row   = document.getElementById('pm-r-baekdu');
+  if(eye)   eye.classList.toggle('on', baekduOn);
+  if(badge){ badge.textContent = baekduOn?'ON':'OFF'; badge.classList.toggle('on', baekduOn); }
+  if(row)   row.classList.toggle('pm-selected', baekduOn);
+}
+
 function pmToggleEco(){
   toggleEco();
   const on=ecoOn;
@@ -1418,28 +1478,7 @@ makeDraggable('analyze-panel','analyze-header');
 makeDraggable('ridge-panel','ridge-header');
 makeDraggable('draw-panel','draw-header');
 
-function toggleCrit(row){
-  const st=row.querySelector('.crit-status');
-  if(st.classList.contains('crit-pend')||st.classList.contains('crit-ng')){
-    st.classList.remove('crit-pend','crit-ng');
-    st.classList.add('crit-ok');
-    st.textContent='가능';
-  } else {
-    st.classList.remove('crit-ok','crit-pend');
-    st.classList.add('crit-ng');
-    st.textContent='불가';
-  }
-  const rows=document.querySelectorAll('.crit-row');
-  const ok=[...rows].filter(r=>r.querySelector('.crit-status')?.classList.contains('crit-ok')).length;
-  const ng=[...rows].filter(r=>r.querySelector('.crit-status')?.classList.contains('crit-ng')).length;
-  const sum=document.getElementById('crit-summary');
-  if(sum){
-    if(ng>0){ sum.textContent=`❌ ${ng}개 불가`; sum.style.color='#dc2626'; }
-    else if(ok===8){ sum.textContent='✅ 8/8 통과'; sum.style.color='#16a34a'; }
-    else if(ok>0){ sum.textContent=`${ok}/8 확인`; sum.style.color='#d97706'; }
-    else{ sum.textContent='0/8'; sum.style.color='#94a3b8'; }
-  }
-}
+function toggleCrit(row){ /* 클릭 토글 비활성화 — 분석 결과만 표시 */ }
 
 
 // ── 2번 건천리 8개 항목 분석 ──────────────────────────
@@ -1757,6 +1796,8 @@ function resetAnalysis(){
   document.getElementById('analyze-status').textContent='';
   document.getElementById('analyze-progress').style.display='none';
   document.getElementById('analyze-bar').style.width='0%';
+  document.getElementById('show-result-btn').style.display='none';
+  _resultData=null;
   // 퀵메뉴 초기화
   document.querySelectorAll('.crit-row').forEach(r=>{
     const st=r.querySelector('.crit-status');
@@ -1946,19 +1987,47 @@ async function startAnalysis(){
     setCritRow(3, false); setCritRow(4, false);
   }
 
-  // ② 백두대간 (Vworld WFS)
+  // ② 백두대간 (Vworld WFS + 저촉 시 폴리곤 표시)
   setStatus('② 백두대간 확인 중...',50);
   let baekduHit=false;
-  try{ baekduHit=await chkBaekdu(clickLat,clickLon); }catch(e){ baekduHit=false; }
+  try{
+    const d=0.008;
+    const r=await fetch(`/api/vworld/wfs?service=WFS&version=2.0.0&request=GetFeature&typename=lt_c_uq111&bbox=${clickLon-d},${clickLat-d},${clickLon+d},${clickLat+d},EPSG:4326&outputFormat=application/json&key=${VWORLD_KEY}`);
+    if(r.ok){
+      const j=await r.json();
+      const feats=j.features||[];
+      baekduHit=feats.length>0;
+      if(baekduHit){
+        feats.forEach(f=>{
+          const geom=f.geometry;
+          if(!geom) return;
+          const rings=(geom.type==='Polygon')?[geom.coordinates]:geom.coordinates;
+          rings.forEach(ring=>{
+            const pts=ring[0].map(c=>[c[1],c[0]]);
+            const poly=L.polygon(pts,{
+              color:'#7c3aed',weight:2,
+              fillColor:'#a855f7',fillOpacity:0.25,
+              dashArray:'6 3'
+            }).addTo(map).bindTooltip('🏔 백두대간 보호구역',{permanent:false});
+            clickResultLayers.push(poly);
+          });
+        });
+        setStatus(`② 백두대간 보호구역 저촉 ${feats.length}개 ❌`,52);
+      } else {
+        setStatus('② 백두대간 미저촉 ✅',52);
+      }
+    }
+  }catch(e){ baekduHit=false; }
   setCritRow(1,!baekduHit);
 
   // ③ 생태자연도 1등급 (에코뱅크 ecoapi WFS)
   setStatus('③ 생태자연도 확인 중...',60);
   let ecoHit=false;
   try{
-    const d=0.05;
+    // bbox를 분석 반경 기반으로 설정 (최소 0.05, 반경에 따라 확대)
+    const d=Math.max(0.05, clickRadius/100);
     const features=await fetchEcoBank1Grade(
-      clickLon-d, clickLat-d, clickLon+d, clickLat+d, 100);
+      clickLon-d, clickLat-d, clickLon+d, clickLat+d, 500);
     if(features.length>0){
       ecoHit=true;
       // 연두색 폴리곤 표시
@@ -2095,7 +2164,252 @@ async function startAnalysis(){
   }
 
   btn.disabled=false; btn.textContent='▶ 분석 시작';
+
+  // ── 결과 저장 → 모달 버튼 표시
+  // 세부 이유 계산
+  const minDistT = existT.length ? Math.round(Math.min(...existT.map(t=>dist(clickLat,clickLon,t.lat,t.lon)))) : null;
+  const maxElev = highGrid.length ? Math.max(...highGrid.map(p=>p.elev)) : null;
+  const minSlope = gentleGrid.length ? Math.min(...gentleGrid.map(p=>p.slp)).toFixed(1) : (elevData.length ? Math.min(...elevData.map(p=>p.slp||99)).toFixed(1) : null);
+
+  _resultData = {
+    lat: clickLat, lon: clickLon, radius: clickRadius,
+    passCount: passCount,
+    labels: [
+      ['①','풍속 6m/s 이상', windOk, windOk ? `측정값 ${windMs}` : `측정값 ${windMs} — 기준 미달`],
+      ['②','백두대간 미저촉', !baekduHit, baekduHit ? '백두대간 보호구역 내 위치' : '해당 없음'],
+      ['③','생태1등급 미저촉', !ecoHit, ecoHit ? '생태자연도 1등급 구역 내 위치' : '해당 없음'],
+      ['④','해발 500m 이상', highGrid.length>0, highGrid.length>0 ? `최고 ${maxElev}m 확인` : `분석 반경 내 500m 이상 지점 없음`],
+      ['⑤','경사 25° 이하', gentleGrid.length>0, gentleGrid.length>0 ? `완경사 지점 ${gentleGrid.length}개 확인` : `경사 25° 이하 지점 없음`],
+      ['⑥','능선 확인', ridgeOk, ridgeOk ? '등고선 데이터 확인' : '해당 지점 능선 데이터 없음'],
+      ['⑦','주거지 200m 이격', homeOk, homeOk ? '200m 내 건물 없음' : '200m 이내 건물 감지'],
+      ['⑧','기존터빈 300m 이격', turbineOk, turbineOk ? '300m 내 기존 터빈 없음' : `최근접 터빈 ${minDistT}m — 기준 미달`],
+    ]
+  };
+  document.getElementById('show-result-btn').style.display='block';
 }
+
+// ── 분석 결과 모달
+let _resultData = null;
+let _miniMap = null;
+
+function openResultModal(){
+  if(!_resultData) return;
+  const modal = document.getElementById('result-modal');
+  modal.style.display = 'flex';
+  modal.style.flexDirection = 'column';
+
+  // 좌표 표시
+  document.getElementById('modal-coord').textContent =
+    `위도 ${_resultData.lat}  경도 ${_resultData.lon}  |  반경 ${_resultData.radius}km`;
+
+  // 항목 렌더링
+  document.getElementById('modal-result-rows').innerHTML = _resultData.labels.map(([no,label,ok,reason])=>
+    `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+      <span style="font-size:16px;width:20px;text-align:center;flex-shrink:0;margin-top:1px;">${ok?'✅':'❌'}</span>
+      <div style="flex:1;">
+        <div style="font-size:12px;color:#0f172a;font-weight:500;">${no} ${label}</div>
+        <div style="font-size:10px;color:${ok?'#16a34a':'#dc2626'};margin-top:2px;">${reason||''}</div>
+      </div>
+    </div>`
+  ).join('');
+
+  // 요약
+  const pass = _resultData.passCount;
+  const sumEl = document.getElementById('modal-result-summary');
+  sumEl.textContent = `${pass} / 8 항목 통과`;
+  sumEl.style.background = pass===8?'#dcfce7':pass>=5?'#fef9c3':'#fee2e2';
+  sumEl.style.color = pass===8?'#166534':pass>=5?'#92400e':'#991b1b';
+
+  // 미니맵 (클릭 위치 중심)
+  setTimeout(()=>{
+    const wrap = document.getElementById('modal-mini-map');
+    if(_miniMap){ _miniMap.remove(); _miniMap=null; }
+    _miniMap = L.map(wrap, {zoomControl:false, attributionControl:false, dragging:false,
+      scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false})
+      .setView([_resultData.lat, _resultData.lon], 13);
+    L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/{z}/{y}/{x}.jpeg`,
+      {maxZoom:18}).addTo(_miniMap);
+    // 클릭 위치 마커
+    L.circleMarker([_resultData.lat,_resultData.lon],
+      {radius:8,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:1}).addTo(_miniMap);
+    // 반경 원
+    L.circle([_resultData.lat,_resultData.lon],
+      {radius:_resultData.radius*1000,color:'#0ea5e9',weight:2,fill:false,dashArray:'6 4'}).addTo(_miniMap);
+  }, 80);
+}
+
+function closeResultModal(){
+  document.getElementById('result-modal').style.display='none';
+}
+// 배경 클릭 닫기 비활성 (드래그 패널)
+
+// ── 결과 모달 드래그
+(function(){
+  const modal = document.getElementById('result-modal');
+  const header = document.getElementById('result-modal-header');
+  if(!modal||!header) return;
+  let ox=0,oy=0,mx=0,my=0,dragging=false;
+  header.addEventListener('mousedown',function(e){
+    if(e.target.tagName==='BUTTON') return;
+    dragging=true;
+    // 현재 위치 기준으로 offset 계산
+    const rect=modal.getBoundingClientRect();
+    ox=e.clientX-rect.left; oy=e.clientY-rect.top;
+    document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!dragging) return;
+    let nx=e.clientX-ox, ny=e.clientY-oy;
+    // 화면 밖 벗어남 방지
+    nx=Math.max(0,Math.min(nx,window.innerWidth-modal.offsetWidth));
+    ny=Math.max(0,Math.min(ny,window.innerHeight-modal.offsetHeight));
+    modal.style.left=nx+'px'; modal.style.top=ny+'px';
+    modal.style.transform='none';
+  });
+  document.addEventListener('mouseup',function(){
+    dragging=false; document.body.style.userSelect='';
+  });
+})();
+
+// ── 저장된 분석 결과 레이어 관리
+const savedResults = [];
+const savedLayerGroup = L.layerGroup().addTo(map);
+let savedIdSeq = 0;
+
+// 저장 다이얼로그 열기 (팝업에서 또는 사이드바 + 버튼)
+function showAddSavedDialog(){
+  // _resultData 없으면 안내
+  if(!_resultData){
+    alert('먼저 클릭 지점 분석을 실행해주세요.');
+    return;
+  }
+  const d = _resultData;
+  document.getElementById('saved-dialog-info').textContent =
+    `위도 ${d.lat}  경도 ${d.lon}  |  반경 ${d.radius}km  |  ${d.passCount}/8 통과`;
+  document.getElementById('saved-dialog-title').value = '';
+  const dlg = document.getElementById('saved-dialog');
+  dlg.style.display = 'flex';
+  setTimeout(()=>document.getElementById('saved-dialog-title').focus(), 80);
+}
+
+function closeSavedDialog(){
+  document.getElementById('saved-dialog').style.display = 'none';
+}
+
+function confirmSaveDialog(){
+  const title = document.getElementById('saved-dialog-title').value.trim() || `분석 #${savedIdSeq+1}`;
+  closeSavedDialog();
+  closeResultModal();
+  _doSave(title);
+}
+
+function saveAnalysisResult(){
+  // 팝업 저장 버튼에서 호출 — 다이얼로그 띄우기
+  showAddSavedDialog();
+}
+
+function _doSave(title){
+  if(!_resultData) return;
+  const id = ++savedIdSeq;
+  const d = _resultData;
+  const pass = d.passCount;
+  const color = pass===8?'#16a34a':pass>=5?'#d97706':'#dc2626';
+
+  // 지도 레이어 생성
+  const layers = [];
+  const marker = L.circleMarker([d.lat,d.lon],{
+    radius:9, fillColor:color, color:'#fff', weight:2, fillOpacity:0.95, zIndexOffset:600
+  }).bindPopup(
+    `<b>📍 ${title}</b><br>${d.lat}, ${d.lon}<br>반경 ${d.radius}km<br>`+
+    `<b style="color:${color}">${pass}/8 통과</b><br><small>`+
+    d.labels.map(([no,,ok])=>`${ok?'✅':'❌'} ${no}`).join(' ')+`</small>`
+  );
+  const circle = L.circle([d.lat,d.lon],{
+    radius:d.radius*1000, color:color, weight:1.5, fill:false, dashArray:'6 4', opacity:0.7
+  });
+  const label = L.marker([d.lat,d.lon],{
+    icon:L.divIcon({
+      html:`<div style="background:${color};color:#fff;border-radius:8px;padding:1px 6px;
+            font-size:9px;font-weight:700;white-space:nowrap;border:1px solid #fff;
+            margin-top:14px;">${pass}/8</div>`,
+      iconSize:[36,16], iconAnchor:[18,-2], className:''
+    }), zIndexOffset:601
+  });
+  [marker,circle,label].forEach(l=>{ l.addTo(savedLayerGroup); layers.push(l); });
+
+  savedResults.push({id, title, d, layers, color, pass});
+  renderSavedList();
+}
+
+function renderSavedList(){
+  const sb = document.getElementById('sidebar-saved-list');
+  if(savedResults.length===0){
+    sb.innerHTML='<div style="padding:8px 14px;font-size:10px;color:#94a3b8;">저장된 결과 없음</div>';
+    return;
+  }
+  sb.innerHTML = savedResults.map(r=>`
+    <div class="poi-item" style="cursor:pointer;border-left:3px solid ${r.color};padding:7px 10px 7px 12px;"
+      onclick="map.setView([${r.d.lat},${r.d.lon}],13);">
+      <div class="poi-dot" style="background:${r.color};border:2px solid #fff;box-shadow:0 0 0 1px ${r.color};margin-top:4px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+          <!-- 제목 (클릭하면 편집) -->
+          <div id="saved-title-${r.id}" class="poi-name" style="font-size:11px;color:#1e293b;
+            flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;"
+            onclick="event.stopPropagation();startEditSavedTitle(${r.id})"
+            title="클릭하여 제목 수정">${r.title}</div>
+          <button onclick="event.stopPropagation();deleteSavedResult(${r.id})"
+            style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:14px;
+            flex-shrink:0;padding:0;line-height:1;" title="삭제">×</button>
+        </div>
+        <div class="poi-sub" style="font-family:monospace;">${r.d.lat}, ${r.d.lon} | 반경 ${r.d.radius}km</div>
+        <div style="font-size:9px;margin-top:2px;color:${r.color};font-weight:600;">${r.pass}/8 통과 &nbsp;
+          ${r.d.labels.map(([no,,ok])=>`<span style="color:${ok?'#16a34a':'#dc2626'}">${ok?'✅':'❌'}</span>`).join('')}
+        </div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function startEditSavedTitle(id){
+  const el = document.getElementById(`saved-title-${id}`);
+  if(!el) return;
+  const cur = el.textContent;
+  el.innerHTML = `<input type="text" value="${cur}"
+    style="width:100%;font-size:11px;border:1px solid #0ea5e9;border-radius:4px;padding:1px 4px;outline:none;"
+    onblur="applyEditSavedTitle(${id},this.value)"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value='${cur}';this.blur();}"
+    onclick="event.stopPropagation()"/>`;
+  el.querySelector('input').focus();
+}
+
+function applyEditSavedTitle(id, val){
+  const r = savedResults.find(r=>r.id===id);
+  if(!r) return;
+  r.title = val.trim() || r.title;
+  // 마커 팝업 업데이트
+  r.layers[0]?.setPopupContent(
+    `<b>📍 ${r.title}</b><br>${r.d.lat}, ${r.d.lon}<br>반경 ${r.d.radius}km<br>`+
+    `<b style="color:${r.color}">${r.pass}/8 통과</b>`
+  );
+  renderSavedList();
+}
+
+function deleteSavedResult(id){
+  const idx = savedResults.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  if(!confirm(`"${savedResults[idx].title}" 삭제할까요?`)) return;
+  savedResults[idx].layers.forEach(l=>savedLayerGroup.removeLayer(l));
+  savedResults.splice(idx,1);
+  renderSavedList();
+}
+
+function clearAllSaved(){
+  savedLayerGroup.clearLayers();
+  savedResults.length=0;
+  renderSavedList();
+}
+
 // ══════════════════════════════════════════
 // 능선부 표시 기능 (A: DEM 자동 + C: 수동 그리기)
 // ══════════════════════════════════════════
@@ -2352,16 +2666,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   // 오브젝트 캔버스 (도형/아이콘 — 이동 가능)
   let objCanvas, objCtx;
 
-  // 오브젝트 목록
-  // 공통 필드: {type, x, y, color, fillOn, fillColor, opacity, size, dash}
-  // 도형 추가: {x2, y2}  (rect/circle/triangle/line/arrow: 드래그 끝점)
-  // 아이콘 추가: {sz}
-  // 다각형 추가: {points:[{x,y}...]}
-  // 텍스트 추가: {text, fontSize}
+  // 오브젝트 목록 (도형/아이콘/텍스트 — geo 좌표)
   let objects = [];
   let selIdx = -1;
   let dragOff = {x:0, y:0};
-  let resizing = false;   // 리사이즈 핸들 드래그 (미구현, 확장 여지)
+  let resizing = false;
+
+  // 펜/지우개 획 목록 (geo 좌표로 저장해 지도 이동에 추종)
+  // stroke: {pts:[{lat,lng}...], color, size, opacity, eraser}
+  let strokes = [];
+  let currentStroke = null;  // 현재 그리는 중인 획
 
   // ── 헬퍼 ──────────────────────────────────────────────────
   function getColor()     { return document.getElementById('draw-color').value; }
@@ -2375,6 +2689,34 @@ document.addEventListener('DOMContentLoaded',()=>{
     const r = cv.getBoundingClientRect();
     const src = (e.touches && e.touches[0]) || e;
     return {x: src.clientX - r.left, y: src.clientY - r.top};
+  }
+
+  // ── 좌표 변환 헬퍼 (px ↔ latLng) ──────────────────────────
+  function pxToLatLng(x, y){
+    const pt = map.containerPointToLatLng(L.point(x, y));
+    return {lat: pt.lat, lng: pt.lng};
+  }
+  function latLngToPx(lat, lng){
+    const pt = map.latLngToContainerPoint(L.latLng(lat, lng));
+    return {x: pt.x, y: pt.y};
+  }
+  // 오브젝트 전체 좌표를 px→geo 변환
+  function objToPxCoords(o){
+    const p = latLngToPx(o.lat, o.lng);
+    const res = Object.assign({}, o, {x: p.x, y: p.y});
+    if(o.lat2 !== undefined){
+      const p2 = latLngToPx(o.lat2, o.lng2);
+      res.x2 = p2.x; res.y2 = p2.y;
+    }
+    if(o.points){
+      res.points = o.points.map(pt=>{ const pp=latLngToPx(pt.lat,pt.lng); return {x:pp.x,y:pp.y}; });
+    }
+    // 아이콘: 줌 레벨에 따라 크기 보정
+    if(o.type && o.type.startsWith('icon-') && o.baseZoom !== undefined){
+      const zoomDiff = map.getZoom() - o.baseZoom;
+      res.sz = Math.max(8, Math.round(o.sz * Math.pow(2, zoomDiff)));
+    }
+    return res;
   }
 
   function syncSize(){
@@ -2406,6 +2748,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     bgCanvas.height = objCanvas.height = wrap.clientHeight;
 
     window.addEventListener('resize', syncSize);
+    // 지도 이동/줌 시 오브젝트 재렌더링
+    map.on('move zoom viewreset', ()=>{ redrawBg(); redrawObj(); });
     setupBgEvents();
     setupObjEvents();
   }
@@ -2478,9 +2822,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // ── Undo / Clear ──────────────────────────────────────────
   function saveBgHistory(){
-    if(!bgCanvas) return;
-    if(bgHistory.length>30) bgHistory.shift();
-    bgHistory.push(bgCtx.getImageData(0,0,bgCanvas.width,bgCanvas.height));
+    bgHistory.push(JSON.parse(JSON.stringify(strokes)));
   }
   function saveObjHistory(){
     if(objHistory.length>30) objHistory.shift();
@@ -2488,7 +2830,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 
   window.undoDraw = function(){
-    if(bgHistory.length){ bgCtx.putImageData(bgHistory.pop(),0,0); }
+    if(bgHistory.length){ strokes=bgHistory.pop(); redrawBg(); }
     if(objHistory.length){ objects=objHistory.pop(); redrawObj(); }
   };
 
@@ -2496,7 +2838,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(!bgCanvas) return;
     saveBgHistory(); saveObjHistory();
     bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
-    objects=[]; selIdx=-1; redrawObj(); polyPoints=[];
+    objects=[]; selIdx=-1; strokes=[]; currentStroke=null; redrawObj(); redrawBg(); polyPoints=[];
   };
 
   window.exportDrawing = function(){
@@ -2574,12 +2916,43 @@ document.addEventListener('DOMContentLoaded',()=>{
     c.setLineDash([]);
   }
 
+  // bgCanvas를 strokes 배열로부터 다시 그리기
+  function redrawBg(){
+    if(!bgCanvas) return;
+    bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+    // 확정된 획들
+    strokes.forEach(s=>drawStroke(s, bgCtx));
+    // 현재 그리는 중인 획
+    if(currentStroke && currentStroke.pts.length>1) drawStroke(currentStroke, bgCtx);
+  }
+
+  function drawStroke(s, ctx){
+    if(s.pts.length<2) return;
+    const pts=s.pts.map(g=>latLngToPx(g.lat,g.lng));
+    ctx.save();
+    ctx.globalAlpha=s.opacity;
+    ctx.strokeStyle=s.color;
+    ctx.lineWidth=s.size;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    if(s.eraser){
+      ctx.globalCompositeOperation='destination-out';
+      ctx.globalAlpha=1;
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x,pts[0].y);
+    pts.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalCompositeOperation='source-over';
+  }
+
   function redrawObj(){
+    if(!objCanvas) return;
     objCtx.clearRect(0,0,objCanvas.width,objCanvas.height);
-    objects.forEach(o=> renderObj(o, objCtx));
+    objects.forEach(o=> renderObj(objToPxCoords(o), objCtx));
     // 선택 박스
     if(selIdx>=0 && selIdx<objects.length){
-      const o = objects[selIdx];
+      const o = objToPxCoords(objects[selIdx]);
       const {bx,by,bw,bh} = getBBox(o);
       objCtx.save();
       objCtx.strokeStyle='#0ea5e9'; objCtx.lineWidth=2;
@@ -2611,10 +2984,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     return {bx:minX,by:minY,bw:Math.max(maxX-minX,4),bh:Math.max(maxY-minY,4)};
   }
 
-  // hit-test: 클릭 좌표가 어떤 오브젝트의 BBox 안에 있는지
+  // hit-test: 클릭 좌표가 어떤 오브젝트의 BBox 안에 있는지 (px 기준)
   function hitTest(px,py){
     for(let i=objects.length-1;i>=0;i--){
-      const {bx,by,bw,bh}=getBBox(objects[i]);
+      const {bx,by,bw,bh}=getBBox(objToPxCoords(objects[i]));
       if(px>=bx-6 && px<=bx+bw+6 && py>=by-6 && py<=by+bh+6) return i;
     }
     return -1;
@@ -2623,9 +2996,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   // 오브젝트 이동 (BBox 기준 delta)
   function moveObj(idx, dx, dy){
     const o = objects[idx];
-    o.x+=dx; o.y+=dy;
-    if(o.x2!==undefined){ o.x2+=dx; o.y2+=dy; }
-    if(o.points) o.points.forEach(p=>{p.x+=dx;p.y+=dy;});
+    // 현재 px → geo, delta 적용 후 geo 업데이트
+    const cur = latLngToPx(o.lat, o.lng);
+    const ng = pxToLatLng(cur.x+dx, cur.y+dy);
+    const dLat = ng.lat-o.lat, dLng = ng.lng-o.lng;
+    o.lat+=dLat; o.lng+=dLng;
+    if(o.lat2!==undefined){ o.lat2+=dLat; o.lng2+=dLng; }
+    if(o.points) o.points.forEach(p=>{p.lat+=dLat;p.lng+=dLng;});
   }
 
   // ── 아이콘 렌더 ───────────────────────────────────────────
@@ -2650,20 +3027,17 @@ document.addEventListener('DOMContentLoaded',()=>{
         c.fillStyle=tc; c.fill(); c.restore();
       }
       c.beginPath(); c.moveTo(-s*0.12,s*0.55); c.lineTo(s*0.12,s*0.55); c.lineWidth=Math.max(2,s/15); c.stroke();
-      c.fillStyle=tc; c.font=`bold ${Math.max(8,s*0.18)}px sans-serif`; c.textAlign='center';
-      c.fillText('터빈',0,s*0.72);
     } else if(t==='icon-substation'){
       c.strokeStyle=col; c.fillStyle=col; c.lineWidth=Math.max(1.5,s/20);
       const hw=s*0.4,hh=s*0.32;
       c.strokeRect(-hw,-hh,hw*2,hh*2);
+      // 번개 크게 (박스 내부를 꽉 채우도록)
       c.beginPath();
-      c.moveTo(-s*0.1,-s*0.22); c.lineTo(s*0.05,-s*0.02); c.lineTo(-s*0.02,-s*0.02);
-      c.lineTo(s*0.1,s*0.22);   c.lineTo(-s*0.05,s*0.02); c.lineTo(s*0.02,s*0.02);
+      c.moveTo(-s*0.12,-s*0.28); c.lineTo(s*0.1,-s*0.02); c.lineTo(-s*0.02,-s*0.02);
+      c.lineTo(s*0.12,s*0.28);   c.lineTo(-s*0.1,s*0.02);  c.lineTo(s*0.02,s*0.02);
       c.closePath(); c.fill();
       c.beginPath(); c.moveTo(0,-hh); c.lineTo(0,-hh-s*0.12); c.stroke();
       c.beginPath(); c.moveTo(0,hh);  c.lineTo(0,hh+s*0.12);  c.stroke();
-      c.fillStyle=col; c.font=`bold ${Math.max(8,s*0.18)}px sans-serif`; c.textAlign='center';
-      c.fillText('계통',0,hh+s*0.28);
     } else if(t==='icon-circle'){
       c.beginPath(); c.arc(0,0,s*0.38,0,Math.PI*2);
       c.fillStyle=col; c.fill();
@@ -2696,9 +3070,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       saveBgHistory(); saveObjHistory();
 
       if(tool==='pen'||tool==='eraser'){
-        applyStyleTo(bgCtx);
-        if(tool==='eraser'){ bgCtx.globalCompositeOperation='destination-out'; bgCtx.globalAlpha=1; }
-        bgCtx.beginPath(); bgCtx.moveTo(p.x,p.y);
+        const g=pxToLatLng(p.x,p.y);
+        currentStroke={pts:[{lat:g.lat,lng:g.lng}],color:getColor(),size:getSize(),opacity:getOpacity(),eraser:tool==='eraser'};
       } else {
         // 도형: bgCanvas에 미리보기, mouseup에서 objects에 추가
         bgSnap=bgCtx.getImageData(0,0,bgCanvas.width,bgCanvas.height);
@@ -2710,7 +3083,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       e.preventDefault();
       const p=getPos(e,bgCanvas);
       if(tool==='pen'||tool==='eraser'){
-        bgCtx.lineTo(p.x,p.y); bgCtx.stroke();
+        if(currentStroke){
+          const g=pxToLatLng(p.x,p.y);
+          currentStroke.pts.push({lat:g.lat,lng:g.lng});
+          // 실시간 미리보기: bgCanvas에 현재 획만 그리기
+          redrawBg();
+        }
       } else if(bgSnap){
         // 미리보기: bgCanvas에 임시 렌더
         bgCtx.putImageData(bgSnap,0,0);
@@ -2724,7 +3102,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       const p=getPos(e,bgCanvas);
       painting=false;
       if(tool==='pen'||tool==='eraser'){
-        bgCtx.globalCompositeOperation='source-over'; bgCtx.globalAlpha=1;
+        if(currentStroke && currentStroke.pts.length>1){
+          saveBgHistory();
+          strokes.push(currentStroke);
+        }
+        currentStroke=null;
+        redrawBg();
       } else if(bgSnap){
         bgCtx.putImageData(bgSnap,0,0); // 미리보기 지우기
         bgSnap=null;
@@ -2761,18 +3144,21 @@ document.addEventListener('DOMContentLoaded',()=>{
     renderObj(tmpObj,bgCtx);
   }
 
-  // 도형 확정 → objects에 추가
+  // 도형 확정 → objects에 추가 (geo 좌표로 저장)
   function addShapeObject(t,x1,y1,x2,y2){
-    if(Math.abs(x2-x1)<2 && Math.abs(y2-y1)<2) return; // 너무 작은 클릭 무시
+    if(Math.abs(x2-x1)<2 && Math.abs(y2-y1)<2) return;
     saveObjHistory();
-    objects.push({type:t,x:x1,y:y1,x2,y2,color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
+    const g1=pxToLatLng(x1,y1), g2=pxToLatLng(x2,y2);
+    objects.push({type:t,lat:g1.lat,lng:g1.lng,lat2:g2.lat,lng2:g2.lng,
+      color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
   }
 
-  // 아이콘 배치
+  // 아이콘 배치 (geo 좌표로 저장)
   function placeIcon(x,y){
     saveObjHistory();
     const t=tool;
-    objects.push({type:t,x,y,sz:getIconSize(),color:ICON_COLORS[t]||getColor(),opacity:getOpacity()});
+    const g=pxToLatLng(x,y);
+    objects.push({type:t,lat:g.lat,lng:g.lng,sz:getIconSize(),baseZoom:map.getZoom(),color:ICON_COLORS[t]||getColor(),opacity:getOpacity()});
     redrawObj();
   }
 
@@ -2857,9 +3243,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   function finishPolygon(){
     if(polyPoints.length<3){ polyPoints=[]; return; }
     // 미리보기 지우고 objects에 추가
-    if(bgHistory.length) bgCtx.putImageData(bgHistory[bgHistory.length-1],0,0);
+    if(bgHistory.length){ strokes=JSON.parse(JSON.stringify(bgHistory[bgHistory.length-1])); redrawBg(); }
     saveObjHistory();
-    objects.push({type:'polygon',x:polyPoints[0].x,y:polyPoints[0].y,points:polyPoints.slice(),color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
+    const gpts=polyPoints.map(p=>{ const g=pxToLatLng(p.x,p.y); return {lat:g.lat,lng:g.lng}; });
+    const g0=gpts[0];
+    objects.push({type:'polygon',lat:g0.lat,lng:g0.lng,points:gpts,color:getColor(),fillOn:getFillOn(),fillColor:getFillColor(),opacity:getOpacity(),size:getSize(),dash:dashStyle});
     polyPoints=[]; redrawObj();
   }
 
@@ -2979,7 +3367,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       inp.remove();
       if(!txt) return;
       saveObjHistory();
-      objects.push({type:'text', x, y, text:txt, fontSize:fs, bold, color, opacity:getOpacity()});
+      const gt=pxToLatLng(x,y);
+      objects.push({type:'text', lat:gt.lat, lng:gt.lng, text:txt, fontSize:fs, bold, color, opacity:getOpacity()});
       redrawObj();
     }
 
@@ -3190,5 +3579,88 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 
+
+<!-- ── 분석 결과 모달 ── -->
+<!-- ── 분석 결과 드래그 패널 ── -->
+<div id="result-modal" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  z-index:9999;width:460px;max-width:95vw;background:#fff;border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.4);overflow:hidden;max-height:90vh;display:none;flex-direction:column;">
+  <!-- 드래그 헤더 -->
+  <div id="result-modal-header" style="background:#1e293b;color:#fff;padding:12px 16px;
+    border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between;
+    cursor:move;flex-shrink:0;user-select:none;">
+    <div>
+      <div style="font-size:13px;font-weight:700;">🖱️ 클릭 지점 분석 결과</div>
+      <div id="modal-coord" style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px;font-family:monospace;"></div>
+    </div>
+    <button onclick="closeResultModal()"
+      style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:18px;
+      width:30px;height:30px;border-radius:50%;cursor:pointer;line-height:1;flex-shrink:0;">×</button>
+  </div>
+  <!-- 미니맵 -->
+  <div id="modal-map-snap" style="width:100%;height:190px;background:#e2e8f0;position:relative;overflow:hidden;flex-shrink:0;">
+    <div id="modal-mini-map" style="width:100%;height:100%;"></div>
+  </div>
+  <!-- 결과 항목 (스크롤) -->
+  <div style="padding:14px 16px;overflow-y:auto;flex:1;">
+    <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:8px;">8개 항목 검토 결과</div>
+    <div id="modal-result-rows"></div>
+    <div id="modal-result-summary"
+      style="margin-top:12px;padding:10px;border-radius:8px;font-size:14px;font-weight:700;text-align:center;"></div>
+  </div>
+  <!-- 저장 버튼 -->
+  <div style="padding:10px 16px;border-top:1px solid #f1f5f9;display:flex;gap:8px;flex-shrink:0;">
+    <button onclick="saveAnalysisResult()"
+      style="flex:1;padding:9px;font-size:11px;font-weight:700;background:#0f766e;color:#fff;
+      border:none;border-radius:8px;cursor:pointer;">💾 결과 저장</button>
+    <button onclick="closeResultModal()"
+      style="padding:9px 16px;font-size:11px;background:#f1f5f9;color:#475569;
+      border:none;border-radius:8px;cursor:pointer;">닫기</button>
+  </div>
+</div>
+
+<!-- ── 저장된 분석 결과 패널 ── -->
+<div id="saved-panel" class="fp" style="top:70px;left:10px;width:230px;display:none;">
+  <div class="fp-header" id="saved-header">
+    <span class="fp-title">📁 저장된 분석 결과</span>
+    <div class="fp-controls">
+      <button class="fp-btn fp-collapse" onclick="fpCollapse('saved')" id="saved-collapse-btn">▼</button>
+    </div>
+  </div>
+  <div class="fp-body" id="saved-body">
+    <div style="padding:8px 12px;">
+      <div id="saved-list" style="max-height:280px;overflow-y:auto;">
+        <div style="font-size:10px;color:#94a3b8;text-align:center;padding:12px 0;">저장된 결과 없음</div>
+      </div>
+      <button onclick="clearAllSaved()" id="saved-clear-btn"
+        style="display:none;width:100%;margin-top:8px;padding:6px;font-size:10px;
+        background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+        🗑 전체 삭제
+      </button>
+    </div>
+  </div>
+</div>
+<!-- 저장 제목 입력 다이얼로그 -->
+<div id="saved-dialog" style="display:none;position:fixed;inset:0;z-index:10000;
+  background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:320px;padding:20px;
+    box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:12px;">📊 분석 결과 저장</div>
+    <div style="font-size:10px;color:#64748b;margin-bottom:6px;">제목 입력</div>
+    <input id="saved-dialog-title" type="text" placeholder="예) 건천리 북쪽 능선 검토"
+      style="width:100%;padding:8px 10px;font-size:12px;border:1px solid #e2e8f0;
+      border-radius:6px;outline:none;margin-bottom:14px;"
+      onkeydown="if(event.key==='Enter')confirmSaveDialog()"/>
+    <div style="font-size:10px;color:#64748b;margin-bottom:4px;" id="saved-dialog-info"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button onclick="confirmSaveDialog()"
+        style="flex:1;padding:8px;font-size:11px;font-weight:700;background:#0f766e;
+        color:#fff;border:none;border-radius:6px;cursor:pointer;">저장</button>
+      <button onclick="closeSavedDialog()"
+        style="padding:8px 16px;font-size:11px;background:#f1f5f9;color:#475569;
+        border:none;border-radius:6px;cursor:pointer;">취소</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
