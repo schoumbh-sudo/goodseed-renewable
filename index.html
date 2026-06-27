@@ -563,11 +563,13 @@
       </div>
       <div class="fp-body" id="ridge-body">
         <div style="padding:10px 14px;">
-          <div style="font-size:10px;color:#64748b;line-height:1.6;margin-bottom:8px;">
-            등고선 지도를 켠 뒤, 실제로 능선이라고 판단한 지점을 클릭해서 표시해줘.<br>
-            <b style="color:#dc2626;">자동/임의 능선선은 생성하지 않음.</b>
-          </div>
-          <button onclick="setLayer('base');setStatus('등고선 지도 모드 — 등고선 흐름을 보고 능선 지점을 선택해주세요',undefined)"
+          <!-- DEM 능선 자동추출 버튼 -->
+          <button id="ridge-wms-btn" onclick="window.requestRidgeFromServer && window.requestRidgeFromServer()"
+            style="width:100%;padding:8px;font-size:11px;font-weight:700;background:#be185d;color:#fff;
+            border:none;border-radius:6px;cursor:pointer;margin-bottom:6px;letter-spacing:0.3px;">
+            🏔 능선 자동추출 (DEM)
+          </button>
+          <button onclick="setLayer('base')"
             style="width:100%;padding:7px;font-size:11px;font-weight:600;background:#0f766e;color:#fff;
             border:none;border-radius:6px;cursor:pointer;margin-bottom:8px;">🗺 등고선 지도 보기
           </button>
@@ -579,6 +581,11 @@
           <div id="ridge-status" style="font-size:10px;color:#64748b;line-height:1.5;background:#f8fafc;padding:6px 8px;border-radius:6px;">
             아직 육안 검토 지점 없음
           </div>
+          <button onclick="clearTerrainMarkers();if(window.clearServerRidges)window.clearServerRidges();"
+            style="width:100%;margin-top:6px;padding:5px;font-size:10px;font-weight:600;
+            background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;">
+            🗑 능선 표시 전체 삭제
+          </button>
         </div>
       </div>
     </div>
@@ -1893,8 +1900,25 @@ function clearRidgeDisplay(){
 
 
 let terrainMarkers=[];
+let terrainPendingKind = null;
+
 function markTerrain(kind){
-  if(!clickLat || !clickLon){ alert('먼저 지도에서 검토할 위치를 클릭해주세요.'); return; }
+  if(!clickLat || !clickLon){
+    // 클릭 대기 모드 진입
+    terrainPendingKind = kind;
+    const rs = document.getElementById('ridge-status');
+    if(rs) rs.innerHTML = `<span style="color:#d97706;font-weight:600;">📍 지도에서 위치를 클릭해주세요 (${kind==='ridge'?'능선':kind==='slope'?'사면':'계곡'})</span>`;
+    map.once('click', function(e){
+      if(!terrainPendingKind) return;
+      clickLat = parseFloat(e.latlng.lat.toFixed(5));
+      clickLon = parseFloat(e.latlng.lng.toFixed(5));
+      const k = terrainPendingKind;
+      terrainPendingKind = null;
+      markTerrain(k);
+    });
+    return;
+  }
+  terrainPendingKind = null;
   const cfg={
     ridge:{label:'능선 육안확인', color:'#facc15', border:'#111827', text:'능선'},
     slope:{label:'사면 육안확인', color:'#38bdf8', border:'#0369a1', text:'사면'},
@@ -3464,7 +3488,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 // ═════════════════════════════════════════════════════════════
 // Wind GIS HTML Patch: 실제 서버 능선 추출 + 수동 능선 그리기 복구
-// 원칙: 브라우저에서 DEM 점을 임의 연결하지 않음. /api/ridge 결과만 능선으로 표시.
+// ── 브라우저 DEM 능선 추적 (Open Topo Data 격자 → 능선 윤곽 폴리라인)
 // ═════════════════════════════════════════════════════════════
 (function(){
   let serverRidgeLayers = [];
@@ -3507,10 +3531,101 @@ document.addEventListener('DOMContentLoaded',()=>{
     serverRidgeLayers=[];
   }
 
-  window.requestRidgeFromServer = async function(){
-    if(!window.clickLat && typeof clickLat !== 'undefined') window.clickLat = clickLat;
-    if(!window.clickLon && typeof clickLon !== 'undefined') window.clickLon = clickLon;
+  // DEM 격자 → 능선 추적 함수
+  async function fetchDEMGrid(lat, lon, radiusKm){
+    // 격자 간격: 능선 추출에 필요한 최소 해상도 (너무 촘촘하면 API 한도 초과)
+    const step = radiusKm <= 1 ? 0.004 : radiusKm <= 2 ? 0.006 : 0.009;
+    const pts = [];
+    for(let la = lat - radiusKm/111; la <= lat + radiusKm/111 + step*0.1; la += step)
+      for(let lo = lon - radiusKm/85; lo <= lon + radiusKm/85 + step*0.1; lo += step)
+        pts.push({lat: parseFloat(la.toFixed(5)), lon: parseFloat(lo.toFixed(5))});
 
+    // 배치당 최대 100개, 요청 간 300ms 딜레이 (API 한도 보호)
+    const BS = 100;
+    const elevMap = {};
+    let failCount = 0;
+    for(let i = 0; i < pts.length; i += BS){
+      const batch = pts.slice(i, i+BS);
+      const locs = batch.map(p=>`${p.lat},${p.lon}`).join('|');
+      try{
+        const r = await fetch(`/api/elevation/srtm30m?locations=${locs}`);
+        if(!r.ok){
+          console.warn(`[DEM] HTTP ${r.status} batch ${i}`);
+          failCount++; if(failCount>=3) break; continue;
+        }
+        const j = await r.json();
+        if(i===0) console.log('[DEM] 첫 배치 응답:', JSON.stringify(j).slice(0,200));
+        if(j.status === 'ERROR'){
+          console.warn('[DEM] API ERROR:', j.error||j);
+          failCount++; if(failCount>=3) break; continue;
+        }
+        (j.results||[]).forEach((res,idx)=>{
+          if(res.elevation !== null && res.elevation !== undefined)
+            elevMap[`${batch[idx].lat},${batch[idx].lon}`] = res.elevation;
+        });
+        failCount = 0;
+        if(i + BS < pts.length) await new Promise(r=>setTimeout(r, 400));
+      }catch(e){
+        console.warn('[DEM] 오류:', e.message);
+        failCount++; if(failCount>=3) break;
+      }
+    }
+    return {pts, elevMap, step};
+  }
+
+  function extractRidgeLines(pts, elevMap, step, lat, lon, radiusKm){
+    // 각 점에서 4방향 이웃보다 높은 점을 능선 후보로 판정
+    const key = p => `${p.lat},${p.lon}`;
+    const elev = p => elevMap[key(p)];
+    const ridgePts = [];
+
+    pts.forEach(p => {
+      const e = elev(p);
+      if(e == null) return;
+      const neighbors = [
+        {lat: p.lat+step, lon: p.lon},
+        {lat: p.lat-step, lon: p.lon},
+        {lat: p.lat, lon: p.lon+step},
+        {lat: p.lat, lon: p.lon-step},
+      ];
+      // 4방향 중 2개 이상 방향에서 가장 낮은 점이고, 수직 방향으론 높은 점 = 능선
+      const ns = neighbors.map(n => elevMap[key(n)]).filter(v => v != null);
+      if(ns.length < 4) return;
+      const sorted = [...ns].sort((a,b)=>a-b);
+      // 능선 조건: 높이가 이웃 평균보다 높고, 최소 이웃보다 15m 이상 높음
+      const avg = ns.reduce((a,b)=>a+b,0)/ns.length;
+      if(e > avg + 5 && e > sorted[0] + 10) ridgePts.push(p);
+    });
+
+    // 능선점들을 인접 체인으로 연결
+    const used = new Set();
+    const lines = [];
+
+    ridgePts.forEach(start => {
+      if(used.has(key(start))) return;
+      const chain = [start];
+      used.add(key(start));
+      let cur = start;
+      // 가장 가까운 미사용 능선점으로 계속 연결
+      for(let iter = 0; iter < 200; iter++){
+        let best = null, bestDist = step * 2.5;
+        ridgePts.forEach(p => {
+          if(used.has(key(p))) return;
+          const d = Math.hypot(p.lat-cur.lat, p.lon-cur.lon);
+          if(d < bestDist){ bestDist=d; best=p; }
+        });
+        if(!best) break;
+        chain.push(best);
+        used.add(key(best));
+        cur = best;
+      }
+      if(chain.length >= 3) lines.push(chain);
+    });
+
+    return lines;
+  }
+
+  window.requestRidgeFromServer = async function(){
     const lat = (typeof clickLat !== 'undefined') ? clickLat : window.clickLat;
     const lon = (typeof clickLon !== 'undefined') ? clickLon : window.clickLon;
     const radius = (typeof clickRadius !== 'undefined') ? clickRadius : 2;
@@ -3521,53 +3636,57 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
 
     clearServerRidges();
-    if(typeof setStatus === 'function') setStatus('⛰️ 서버에 실제 DEM 기반 능선 추출 요청 중...', 72);
-    setRidgeCriterion(false, '조회중');
+    const ridgeBtn = document.getElementById('ridge-wms-btn');
+    if(ridgeBtn){ ridgeBtn.disabled=true; ridgeBtn.textContent='⏳ 수집 중...'; }
+    if(typeof setStatus === 'function') setStatus('⛰️ DEM 고도 데이터 수집 중... (잠시 대기)', 65);
+    setRidgeCriterion(false, '분석중');
 
-    const url = `/api/ridge?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`;
     try{
-      const res = await fetch(url, { headers:{'Accept':'application/json'} });
-      if(!res.ok) throw new Error(`서버 응답 오류 HTTP ${res.status}`);
-      const data = await res.json();
-      const gj = normalizeGeoJSON(data);
-
-      if(!hasGeoJSONFeatures(gj)){
-        if(typeof setStatus === 'function') setStatus('⚠️ 서버 응답은 받았지만 능선 GeoJSON이 없음 — 지도 표시 안 함', 100);
-        setRidgeCriterion(false, '자료없음');
+      const {pts, elevMap, step} = await fetchDEMGrid(lat, lon, radius);
+      const validCount = Object.keys(elevMap).length;
+      if(ridgeBtn){ ridgeBtn.disabled=false; ridgeBtn.textContent='🏔 능선 자동추출 (DEM)'; }
+      if(validCount < 10){
+        if(typeof setStatus === 'function') setStatus(`⚠️ 고도 데이터 부족(${validCount}개) — 반경을 줄이거나 잠시 후 재시도`, 100);
+        setRidgeCriterion(false, '데이터부족');
         return;
       }
 
-      // 검은 외곽선 먼저, 노란 실제 능선선 나중에 표시
-      const outline = L.geoJSON(gj, {
-        style: () => ({ color:'#111827', weight:8, opacity:0.95, lineCap:'round', lineJoin:'round' }),
-        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:8,color:'#111827',weight:3,fillColor:'#facc15',fillOpacity:1})
-      }).addTo(map);
-      const ridge = L.geoJSON(gj, {
-        style: () => ({ color:'#facc15', weight:4, opacity:1, lineCap:'round', lineJoin:'round' }),
-        pointToLayer: (feature, latlng) => L.circleMarker(latlng,{radius:6,color:'#111827',weight:2,fillColor:'#facc15',fillOpacity:1}),
-        onEachFeature: (feature, layer) => {
-          const src = data.source || feature.properties?.source || 'DEM 서버 분석';
-          layer.bindTooltip(`실제 능선 · ${src}`, {permanent:false});
-        }
-      }).addTo(map);
-      serverRidgeLayers.push(outline, ridge);
-      try { map.fitBounds(ridge.getBounds(), {padding:[40,40]}); } catch(e) {}
+      if(typeof setStatus === 'function') setStatus(`⛰️ 능선 추적 중... (고도점 ${validCount}개)`, 80);
+      const lines = extractRidgeLines(pts, elevMap, step, lat, lon, radius);
 
-      if(typeof setStatus === 'function') setStatus('✅ 실제 DEM 기반 능선 표시 완료', 100);
-      setRidgeCriterion(true, '서버확인');
+      if(lines.length === 0){
+        if(typeof setStatus === 'function') setStatus('⚠️ 능선 감지 없음 — 반경을 조절해보세요', 100);
+        setRidgeCriterion(false, '감지없음');
+        return;
+      }
+
+      // 외곽선(흰색) + 능선선(분홍) 렌더링
+      lines.forEach(chain => {
+        const latlngs = chain.map(p => [p.lat, p.lon]);
+        const outline = L.polyline(latlngs, {
+          color:'#fff', weight:5, opacity:0.8, lineCap:'round', lineJoin:'round'
+        }).addTo(map);
+        const ridge = L.polyline(latlngs, {
+          color:'#ec4899', weight:3, opacity:0.95, lineCap:'round', lineJoin:'round',
+          dashArray: null
+        }).addTo(map).bindTooltip('능선 (DEM 분석)', {permanent:false});
+        serverRidgeLayers.push(outline, ridge);
+      });
+
+      if(typeof setStatus === 'function') setStatus(`✅ 능선 ${lines.length}개 추출 완료`, 100);
+      setRidgeCriterion(true, `능선${lines.length}개`);
     }catch(err){
-      console.warn('능선 서버 추출 실패:', err);
-      if(typeof setStatus === 'function') setStatus('❌ 능선 추출 서버 미연결 또는 오류 — 임의 표시 안 함', 100);
-      setRidgeCriterion(false, '서버필요');
+      console.warn('능선 추출 오류:', err);
+      if(typeof setStatus === 'function') setStatus('❌ 능선 추출 오류: ' + err.message, 100);
+      setRidgeCriterion(false, '오류');
+      const rb = document.getElementById('ridge-wms-btn');
+      if(rb){ rb.disabled=false; rb.textContent='🏔 능선 자동추출 (DEM)'; }
     }
   };
 
-  // 자동 DEM 추정/임의 연결 기능은 완전 차단
-  window.drawAutoRidge = async function(){
-    alert('브라우저 DEM 임의 능선 자동표시는 사용하지 않아. 실제 /api/ridge 서버 결과만 표시해.');
-  };
+  window.drawAutoRidge = window.requestRidgeFromServer;
   window.fetchRidgeWFS = async function(){ return 0; };
-  window.detectRidgeFromDEM = async function(){ return; };
+  window.detectRidgeFromDEM = window.requestRidgeFromServer;
   window.toggleRidgeWms = window.requestRidgeFromServer;
 
   // 수동 능선 그리기 복구: 사용자가 직접 표시하는 보조 기능. 자동 분석 결과로 취급하지 않음.
@@ -3590,10 +3709,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('DOMContentLoaded', ()=>{
     const apiBtn=document.getElementById('ridge-wms-btn');
     if(apiBtn){
-      apiBtn.textContent='⛰️ 능선 서버추출';
-      apiBtn.style.color='#ca8a04';
+      apiBtn.textContent='🏔 능선 자동추출 (DEM)';
+      apiBtn.style.color='#fff';
+      apiBtn.style.background='#0f766e';
       apiBtn.onclick=window.requestRidgeFromServer;
-      apiBtn.title='/api/ridge?lat=...&lon=...&radius=... 결과가 있을 때만 능선을 표시';
+      apiBtn.title='Open Topo Data DEM 기반 능선 자동 추출';
     }
     const drawBtn=document.getElementById('ridge-btn');
     if(drawBtn){
@@ -3608,7 +3728,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       const box=document.createElement('div');
       box.id='server-ridge-help';
       box.style.cssText='font-size:10px;color:#475569;line-height:1.55;background:#fffbeb;border:1px solid #fde68a;padding:7px 8px;border-radius:6px;margin-top:8px;';
-      box.innerHTML='서버추출은 <b>/api/ridge</b>가 실제 DEM 기반 GeoJSON을 반환할 때만 노란 능선을 표시함.<br><b style="color:#dc2626;">서버 결과가 없으면 아무 능선도 그리지 않음.</b>';
+      box.innerHTML='클릭 지점 반경 내 고도 데이터(SRTM)를 분석해 능선을 <b style="color:#ec4899;">분홍 라인</b>으로 표시합니다.<br>반경이 클수록 시간이 더 걸립니다.';
       panel.appendChild(box);
     }
   });
