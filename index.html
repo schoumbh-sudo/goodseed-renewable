@@ -11,15 +11,44 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
          display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  header { background: #1e293b; color: #fff; padding: 0 20px;
-           display: flex; align-items: center; justify-content: space-between;
+  header { background: #1e293b; color: #fff; padding: 0 16px;
+           display: flex; align-items: center; gap: 12px;
            flex-shrink: 0; height: 52px; }
-  header h1 { margin: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-  header h1 .brand-main { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
-  header h1 .brand-ai { font-size: 22px; font-weight: 900; color: #4ade80; letter-spacing: -0.5px; }
+  header h1 { margin: 0; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; flex-shrink: 0; }
+  header h1 .brand-main { font-size: 20px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+  header h1 .brand-ai { font-size: 20px; font-weight: 900; color: #4ade80; letter-spacing: -0.5px; }
   header h1 .brand-sub { font-size: 10px; font-weight: 400;
     color: rgba(255,255,255,0.4); letter-spacing: 0.8px; }
-  header span { font-size: 11px; color: rgba(255,255,255,0.4); }
+  header > .header-sub { font-size: 11px; color: rgba(255,255,255,0.4); flex-shrink: 0; }
+  /* 헤더 검색바 */
+  #header-search { display: flex; align-items: center; gap: 6px;
+    flex: 1; max-width: 340px; margin-left: auto; }
+  #header-search-input {
+    flex: 1; padding: 6px 11px; font-size: 12px;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.12); color: #fff;
+    outline: none; min-width: 0;
+  }
+  #header-search-input::placeholder { color: rgba(255,255,255,0.45); }
+  #header-search-input:focus { border-color: #4ade80; background: rgba(255,255,255,0.18); }
+  #header-search-btn {
+    padding: 6px 12px; font-size: 11px; font-weight: 600;
+    background: #fff; color: #1e293b; border: none;
+    border-radius: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  #header-search-btn:active { background: #e2e8f0; }
+  /* 하단 출처 바 */
+  #footer-bar {
+    flex-shrink: 0; background: #1e293b;
+    color: rgba(255,255,255,0.4); font-size: 10px;
+    text-align: center; padding: 3px 12px;
+    letter-spacing: 0.3px;
+  }
+  @media (max-width: 600px) {
+    header h1 .brand-sub { display: none; }
+    header > .header-sub { display: none; }
+    #header-search { max-width: 100%; }
+  }
   #layout { display: flex; flex: 1; overflow: hidden; }
   #sidebar { width: 285px; flex-shrink: 0; background: #fff;
              border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden;
@@ -213,7 +242,12 @@
     <span class="brand-main">GOODSEED Renewable</span><span class="brand-ai">AI</span>
     <span class="brand-sub">Renewable Energy Intelligence Platform</span>
   </h1>
-  <span>에너지공단 공공데이터 (2022) + Vworld 위성</span>
+  <div id="header-search">
+    <input id="header-search-input" type="text" placeholder="주소 또는 지명 검색..."
+      onkeydown="if(event.key==='Enter')searchAddr()"
+      oninput="syncSearchInput(this.value)"/>
+    <button id="header-search-btn" onclick="searchAddr()">🔍 검색</button>
+  </div>
 </header>
 <div id="layout">
   <div id="sidebar">
@@ -262,17 +296,8 @@
   <!-- 사이드바 접기/펼치기 버튼 -->
   <button id="sidebar-toggle-btn" onclick="toggleSidebar()" title="사이드바 접기/펼치기">◀</button>
   <div id="map-wrap" style="position:relative;flex:1;overflow:hidden;">
-    <div id="search-bar" style="position:absolute;top:10px;left:300px;z-index:1000;display:flex;gap:6px;">
-      <input id="search-input" type="text" placeholder="주소 또는 지명 검색..."
-        style="width:240px;padding:7px 12px;font-size:12px;border-radius:6px;
-               border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,0.1);outline:none;"
-        onkeydown="if(event.key==='Enter')searchAddr()"/>
-      <button onclick="searchAddr()"
-        style="padding:7px 14px;font-size:11px;font-weight:600;background:#1e293b;color:#fff;
-               border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-        검색
-      </button>
-    </div>
+    <!-- 기존 search-bar: 헤더로 이동됨 (숨김 유지, searchAddr 함수가 #search-input 참조) -->
+    <input id="search-input" type="text" style="display:none;" aria-hidden="true"/>
     <div id="map"></div>
     <!-- 패널 매니저 -->
     <div id="panel-manager" style="position:absolute;top:10px;right:10px;z-index:1050;
@@ -1056,7 +1081,10 @@ async function addSolarMarkers() {
 }
 
 function _renderSolarItem(s) {
-  if(s._el && s._el.parentNode) s._el.parentNode.removeChild(s._el);
+  const oldEl = s._el;
+  const oldNext = oldEl && oldEl.nextSibling;  // 기존 위치 다음 형제 기억
+  const oldParent = oldEl && oldEl.parentNode;
+  if(oldEl && oldParent) oldParent.removeChild(oldEl);
   const el=document.createElement('div');
   el.className='poi-item'; el.dataset.name=s.name;
   s._el = el;
@@ -1098,7 +1126,10 @@ function _renderSolarItem(s) {
     showInfo(infoLabel, s.name, s.note);
     map.flyTo([s.lat,s.lon],13,{duration:1.2});
   });
-  document.getElementById('solar-list').appendChild(el);
+  // 기존 위치에 삽입 (없으면 맨 뒤)
+  const list = document.getElementById('solar-list');
+  if(oldParent === list && oldNext) list.insertBefore(el, oldNext);
+  else list.appendChild(el);
 }
 
 function _editSolarItem(s){
@@ -1252,6 +1283,7 @@ const inGW = (lat,lon)=>lat>=36.9&&lat<=38.3&&lon>=127.5&&lon<=129.5;
 // ── 풍력 데이터
 const windDanji = {};
 let totalCnt = 0;
+const nw2LayerGroup = L.layerGroup().addTo(map);  // 건천리 신규터빈 마커 그룹
 
 function addItem(item) {
   const lat = parseFloat(item['위도(lat)']||'');
@@ -1336,8 +1368,17 @@ async function fetchWind() {
 }
 
 // ── 주소 검색 (Vworld 검색 API - JSONP 방식으로 CORS 우회)
+// 헤더 input ↔ 숨김 input 동기화
+function syncSearchInput(val){
+  const hidden = document.getElementById('search-input');
+  if(hidden) hidden.value = val;
+}
+
 function searchAddr() {
-  const query = document.getElementById('search-input').value.trim();
+  // 헤더 검색바 우선, 없으면 기존 hidden input
+  const headerInput = document.getElementById('header-search-input');
+  const hiddenInput = document.getElementById('search-input');
+  const query = (headerInput ? headerInput.value : hiddenInput ? hiddenInput.value : '').trim();
   if (!query) return;
 
   // JSONP 콜백 함수명
@@ -2137,11 +2178,12 @@ async function analyzeGeonCheonri(existTurbines){
     return;
   }
 
-  // 빨간 점 표시
+  // 기존 마커 클리어 후 새로 표시
+  nw2LayerGroup.clearLayers();
   passed.forEach((p,i)=>{
     L.circleMarker([p.lat,p.lon],{
       radius:7,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:0.92,zIndexOffset:500
-    }).addTo(map).bindPopup(
+    }).addTo(nw2LayerGroup).bindPopup(
       `<b>🔴 건천리 신규터빈 T${i+1}</b><br>`+
       `위도: ${p.lat} / 경도: ${p.lon}<br>`+
       `해발: ${p.elev}m / 경사: ${p.slp?.toFixed(1)}°<br>`+
@@ -2154,13 +2196,13 @@ async function analyzeGeonCheonri(existTurbines){
               white-space:nowrap;margin-top:12px;">T${i+1}</div>`,
         iconSize:[28,16],iconAnchor:[14,-2],className:''
       }),zIndexOffset:501
-    }).addTo(map);
+    }).addTo(nw2LayerGroup);
   });
 
   if(passed.length>1){
     L.polyline(passed.slice().sort((a,b)=>a.lat-b.lat).map(p=>[p.lat,p.lon]),{
       color:'#ef4444',weight:2,dashArray:'6 4',opacity:0.7
-    }).addTo(map);
+    }).addTo(nw2LayerGroup);
   }
 
   setNW2Title(`2번 건천리 — 신규터빈 ${passed.length}기 후보 ✅`,'#16a34a');
@@ -2295,9 +2337,26 @@ async function analyzeGeonCheonri(existTurbines){
 
   // 드래그앤드롭
   const overlay=document.getElementById('drop-overlay');
-  document.addEventListener('dragover',e=>{ e.preventDefault(); if(overlay) overlay.style.display='flex'; });
+
+  // 텍스트 input/textarea 편집 중이면 드롭 이벤트 무시 (글자 편집 중 오류 방지)
+  function _isEditingText(e){
+    const t=e.target; if(!t) return false;
+    return t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable||
+           (t.id&&t.id==='draw-inline-input');
+  }
+
+  document.addEventListener('dragover',e=>{
+    if(_isEditingText(e)) return; // input 위에서는 오버레이 안 띄움
+    e.preventDefault();
+    if(overlay) overlay.style.display='flex';
+  });
   document.addEventListener('dragleave',e=>{ if(!e.relatedTarget&&overlay) overlay.style.display='none'; });
   document.addEventListener('drop',e=>{
+    if(_isEditingText(e)) return; // input 안에서 텍스트 드롭 허용 (가로채지 않음)
+    // dataTransfer에 파일이 없으면 (텍스트 드래그) 무시
+    if(!e.dataTransfer.files||e.dataTransfer.files.length===0){
+      if(overlay) overlay.style.display='none'; return;
+    }
     e.preventDefault();
     if(overlay) overlay.style.display='none';
     const files=[...e.dataTransfer.files].filter(f=>/\.(geojson|json|kml|gpx)$/i.test(f.name));
@@ -2313,14 +2372,13 @@ function toggleSidebar(){
   const sb = document.getElementById('sidebar');
   const rz = document.getElementById('sidebar-resizer');
   const btn = document.getElementById('sidebar-toggle-btn');
-  const searchBar = document.getElementById('search-bar');
   _sidebarCollapsed = !_sidebarCollapsed;
   if(_sidebarCollapsed){
     sb.classList.add('collapsed');
     if(rz) rz.style.display='none';
     btn.textContent = '▶';
     btn.style.left = '0px';
-    if(searchBar) searchBar.style.left = '24px';
+    // (search-bar 헤더로 이동, 위치 조정 불필요)
   } else {
     sb.classList.remove('collapsed');
     if(rz) rz.style.display='';
@@ -2329,7 +2387,7 @@ function toggleSidebar(){
     setTimeout(()=>{
       const w = sb.offsetWidth;
       btn.style.left = w+'px';
-      if(searchBar) searchBar.style.left = (w+15)+'px';
+      // (search-bar 헤더로 이동, 위치 조정 불필요)
     }, 260);
   }
   // 지도 resize
@@ -2961,10 +3019,11 @@ async function startAnalysis(){
       if(passed.some(q=>dist(p.lat,p.lon,q.lat,q.lon)<400)) return;
       passed.push(p);
     });
+    nw2LayerGroup.clearLayers();
     passed.forEach((p,i)=>{
       const m=L.circleMarker([p.lat,p.lon],{
         radius:7,fillColor:'#ef4444',color:'#fff',weight:2,fillOpacity:0.92,zIndexOffset:500
-      }).addTo(map).bindPopup(
+      }).addTo(nw2LayerGroup).bindPopup(
         `<b>🔴 신규터빈 후보 T${i+1}</b><br>`+
         `${p.lat}, ${p.lon}<br>`+
         `해발 ${p.elev}m · 경사 ${p.slp?.toFixed(1)}°<br>`+
@@ -2977,7 +3036,7 @@ async function startAnalysis(){
                 margin-top:12px;">T${i+1}</div>`,
           iconSize:[26,16],iconAnchor:[13,-2],className:''
         }),zIndexOffset:501
-      }).addTo(map);
+      }).addTo(nw2LayerGroup);
       clickResultLayers.push(m,lb);
     });
     if(passed.length>0) setStatus(`✅ 8/8 통과 — 터빈 후보 ${passed.length}기 표시`,100);
@@ -5002,5 +5061,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
   </div>
 </div>
+  <div id="footer-bar">에너지공단 공공데이터 (2022) + Vworld 위성</div>
 </body>
 </html>
