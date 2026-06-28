@@ -45,9 +45,50 @@
     letter-spacing: 0.3px;
   }
   @media (max-width: 600px) {
+    header {
+      height: auto;
+      min-height: 86px;
+      padding: 8px 10px 9px;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-content: center;
+    }
+    header h1 {
+      width: 100%;
+      min-width: 0;
+      gap: 4px;
+      line-height: 1.1;
+    }
+    header h1 .brand-main {
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
+    header h1 .brand-ai {
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
     header h1 .brand-sub { display: none; }
     header > .header-sub { display: none; }
-    #header-search { max-width: 100%; }
+    #header-search {
+      flex: 0 0 100%;
+      width: 100%;
+      max-width: none;
+      margin-left: 0;
+      gap: 6px;
+    }
+    #header-search-input {
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    #header-search-btn {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+  }
+  @media (max-width: 380px) {
+    #header-search-btn { padding: 8px 8px; }
   }
   #layout { display: flex; flex: 1; overflow: hidden; }
   #sidebar { width: 285px; flex-shrink: 0; background: #fff;
@@ -234,6 +275,398 @@
   transform: translateZ(0);
   transition: opacity 0.15s ease;
 }
+
+
+  /* ── 모바일 반응형 보정: 검색창은 2줄, 그림판은 화면 폭 안에 맞춤 */
+  @media (max-width: 600px) {
+    #draw-panel {
+      /* 모바일 기본 위치만 지정. JS 드래그가 inline left/top을 바꿀 수 있게 !important 제거 */
+      top: 96px;
+      left: 8px;
+      right: auto;
+      width: calc(100vw - 16px) !important;
+      min-width: 0 !important;
+      max-width: calc(100vw - 16px) !important;
+      max-height: calc(100dvh - 125px) !important;
+      border-radius: 10px;
+      touch-action: none;
+    }
+    #draw-panel .fp-header {
+      padding: 7px 9px;
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #draw-panel .fp-title {
+      font-size: 11px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #draw-panel .fp-controls {
+      gap: 3px;
+    }
+    #draw-panel .fp-btn {
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+    #draw-body {
+      max-height: calc(100dvh - 170px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #draw-toolbar {
+      padding: 6px;
+      gap: 4px;
+      max-height: 122px;
+      overflow-y: auto;
+      align-items: flex-start;
+    }
+    .dt-btn {
+      padding: 4px 7px;
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    #draw-bottom {
+      padding: 6px;
+      gap: 6px;
+      max-height: 138px;
+      overflow-y: auto;
+      align-items: flex-start;
+    }
+    #draw-bottom label {
+      font-size: 10px;
+    }
+    #shape-opts,
+    #text-opts {
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    #draw-size,
+    #draw-opacity,
+    #icon-size,
+    #text-size {
+      width: 54px !important;
+    }
+    #draw-color,
+    #draw-fill-color,
+    #text-color {
+      width: 24px !important;
+      height: 24px !important;
+    }
+    #draw-mode-badge,
+    #draw-poly-hint {
+      font-size: 9px !important;
+    }
+  }
+
+
+  /* 모바일: 그림판 헤더 버튼은 드래그보다 터치 클릭 우선 */
+  #draw-header .fp-controls,
+  #draw-header .fp-btn {
+    position: relative;
+    z-index: 5;
+    touch-action: manipulation;
+    pointer-events: auto;
+  }
+
+  /* ── 모바일 사이드바 손가락 리사이즈 보강 */
+  @media (max-width: 768px) {
+    #sidebar {
+      /* 처음 모바일 진입 시 화면의 약 1/3만 보이도록 */
+      width: 33.333vw;
+      min-width: 44px !important;
+      max-width: 85vw !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* 왼쪽바 전체가 하나로 아래 스크롤되도록 내부 목록 스크롤을 해제 */
+    #solar-list,
+    #sidebar-saved-list,
+    #wind-list,
+    #status-bar,
+    #new-wind-list,
+    #sidebar .sec-title-lg,
+    #sidebar .sec-title {
+      flex: 0 0 auto !important;
+    }
+    #wind-list {
+      overflow: visible !important;
+      max-height: none !important;
+    }
+    #sidebar .poi-item {
+      padding-left: 8px;
+      padding-right: 8px;
+      gap: 6px;
+    }
+    #sidebar .poi-name {
+      font-size: 11px;
+    }
+    #sidebar .poi-sub {
+      font-size: 9px;
+    }
+
+    /* 보이는 바는 5px만, 실제 터치 영역은 약 21px */
+    #sidebar-resizer {
+      width: 5px !important;
+      min-width: 5px !important;
+      flex-basis: 5px !important;
+      touch-action: none;
+      cursor: ew-resize;
+      background: rgba(30,41,59,0.16) !important;
+      position: relative;
+      z-index: 1200 !important;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+    #sidebar-resizer::before {
+      content: '';
+      position: absolute;
+      left: -8px;
+      right: -8px;
+      top: 0;
+      bottom: 0;
+      z-index: 1;
+      background: transparent;
+    }
+    #sidebar-resizer::after {
+      content: '⋮';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(30,41,59,0.38);
+      font-size: 11px;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 2;
+    }
+    #sidebar-resizer:hover,
+    #sidebar-resizer.dragging,
+    body.sidebar-resizing #sidebar-resizer {
+      background: #4A90E2 !important;
+      box-shadow: 0 0 0 1px rgba(74,144,226,0.25);
+    }
+    body.sidebar-resizing,
+    body.sidebar-resizing * {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    body.sidebar-resizing #map {
+      pointer-events: none;
+    }
+  }
+
+
+  /* ── 프로젝트 클릭 팝업: 모바일에서는 작고 이동 가능한 모달 */
+  #info-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.32);
+    z-index: 1290;
+    display: none;
+  }
+  #info-panel .ip-actions {
+    display: none;
+  }
+  @media (max-width: 600px) {
+    #info-backdrop.open { display: block; }
+    #info-panel {
+      position: fixed !important;
+      left: 50%;
+      top: 50%;
+      right: auto !important;
+      bottom: auto !important;
+      transform: translate(-50%, -50%);
+      width: 80vw !important;
+      max-width: 340px !important;
+      min-width: 270px !important;
+      max-height: 65dvh !important;
+      overflow: hidden !important;
+      display: none;
+      padding: 0 !important;
+      border-radius: 14px !important;
+      z-index: 1300 !important;
+      box-shadow: 0 10px 34px rgba(0,0,0,0.35) !important;
+      border: 1px solid rgba(226,232,240,0.95) !important;
+      background: #fff !important;
+    }
+    #info-panel.info-dragged {
+      transform: none !important;
+    }
+    #info-panel.info-dragging {
+      opacity: 0.96;
+      transition: none !important;
+      cursor: grabbing !important;
+    }
+    body.info-modal-dragging,
+    body.info-modal-dragging * {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    #info-panel .ip-close {
+      top: 7px !important;
+      right: 7px !important;
+      width: 30px !important;
+      height: 30px !important;
+      line-height: 28px !important;
+      text-align: center !important;
+      font-size: 20px !important;
+      z-index: 5;
+      border-radius: 50% !important;
+      background: rgba(15,23,42,0.08) !important;
+      color: #64748b !important;
+      touch-action: manipulation;
+    }
+    #info-panel .ip-type {
+      font-size: 10px !important;
+      padding: 12px 42px 5px 14px !important;
+      margin: 0 !important;
+      background: #1e293b;
+      color: rgba(255,255,255,0.72) !important;
+      border-bottom: none !important;
+      cursor: move;
+      touch-action: none;
+    }
+    #info-panel .ip-name {
+      font-size: 14px !important;
+      line-height: 1.34 !important;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      padding: 8px 14px 10px !important;
+      margin: 0 !important;
+      background: #1e293b;
+      color: #fff !important;
+      border-bottom: 1px solid #334155 !important;
+      cursor: move;
+      touch-action: none;
+    }
+    #info-panel .ip-note {
+      font-size: 11.5px !important;
+      line-height: 1.65 !important;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      border-top: none !important;
+      padding: 11px 14px !important;
+      margin: 0 !important;
+      max-height: calc(65dvh - 137px) !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+    }
+    #info-panel .ip-actions {
+      display: flex !important;
+      gap: 8px;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: #f8fafc;
+      border-top: 1px solid #eef2f7;
+    }
+    #info-panel .ip-action-btn {
+      flex: 1;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #1e293b;
+      color: #fff;
+      touch-action: manipulation;
+    }
+  }
+
+
+
+  /* ── 012 수정: 모바일 프로젝트 팝업 축소 + 반투명 화이트/검정 글씨 */
+  @media (max-width: 600px) {
+    #info-backdrop.open {
+      display: block;
+      background: rgba(0, 0, 0, 0.02) !important;
+    }
+    #info-panel {
+      width: 70vw !important;
+      max-width: 285px !important;
+      min-width: 220px !important;
+      max-height: 62dvh !important;
+      background: rgba(255,255,255,0.70) !important;
+      color: #111827 !important;
+      border: 1px solid rgba(0,0,0,0.16) !important;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.28) !important;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    #info-panel .ip-close {
+      background: rgba(255,255,255,0.45) !important;
+      color: #111827 !important;
+      border: 1px solid rgba(0,0,0,0.12) !important;
+    }
+    #info-panel .ip-type {
+      background: rgba(255,255,255,0.0) !important;
+      color: #111827 !important;
+      border-bottom: 1px solid rgba(0,0,0,0.10) !important;
+      font-weight: 700 !important;
+    }
+    #info-panel .ip-name {
+      background: rgba(255,255,255,0.0) !important;
+      color: #111827 !important;
+      border-bottom: 1px solid rgba(0,0,0,0.12) !important;
+      font-weight: 800 !important;
+    }
+    #info-panel .ip-note {
+      background: rgba(255,255,255,0.0) !important;
+      color: #111827 !important;
+      max-height: calc(62dvh - 132px) !important;
+    }
+    #info-panel .ip-actions {
+      background: rgba(255,255,255,0.0) !important;
+      border-top: 1px solid rgba(0,0,0,0.10) !important;
+    }
+    #info-panel .ip-action-btn {
+      background: rgba(255,255,255,0.55) !important;
+      color: #111827 !important;
+      border: 1px solid rgba(0,0,0,0.16) !important;
+    }
+  }
+
+
+
+  /* ── 013 수정: 프로젝트 팝업 하단 닫기 버튼 제거 + 세로 길이 축소 */
+  @media (max-width: 600px) {
+    #info-panel {
+      max-height: 46dvh !important;
+      height: auto !important;
+    }
+    #info-panel .ip-type {
+      padding: 9px 40px 3px 12px !important;
+      font-size: 9.5px !important;
+    }
+    #info-panel .ip-name {
+      padding: 6px 12px 7px !important;
+      font-size: 13px !important;
+      line-height: 1.25 !important;
+    }
+    #info-panel .ip-note {
+      padding: 8px 12px !important;
+      font-size: 11px !important;
+      line-height: 1.48 !important;
+      max-height: calc(46dvh - 82px) !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    #info-panel .ip-actions {
+      display: none !important;
+    }
+    #info-panel .ip-close {
+      width: 26px !important;
+      height: 26px !important;
+      line-height: 24px !important;
+      font-size: 18px !important;
+      top: 5px !important;
+      right: 5px !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -548,8 +981,9 @@
       </div>
     </div>
 
-    <div id="info-panel">
-      <button class="ip-close" onclick="this.parentElement.style.display='none'">×</button>
+    <div id="info-backdrop" onclick="closeInfoModal()"></div>
+    <div id="info-panel" role="dialog" aria-modal="true" aria-labelledby="ip-name">
+      <button class="ip-close" onclick="closeInfoModal()" aria-label="닫기">×</button>
       <div class="ip-type" id="ip-type"></div>
       <div class="ip-name" id="ip-name"></div>
       <div class="ip-note" id="ip-note"></div>
@@ -1010,15 +1444,135 @@ function setLayer(n) {
   });
 }
 
+function closeInfoModal(){
+  const infoPanel = document.getElementById('info-panel');
+  const backdrop = document.getElementById('info-backdrop');
+  if(infoPanel) infoPanel.style.display = 'none';
+  if(backdrop) backdrop.classList.remove('open');
+}
+
+function isMobileInfoModal(){
+  return !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
+}
+
+function clampInfoModalToViewport(){
+  const panel = document.getElementById('info-panel');
+  if(!panel || panel.style.display === 'none' || !isMobileInfoModal()) return;
+  const rect = panel.getBoundingClientRect();
+  const margin = 8;
+  let left = rect.left;
+  let top = rect.top;
+  left = Math.min(Math.max(left, margin), window.innerWidth - rect.width - margin);
+  top = Math.min(Math.max(top, margin), window.innerHeight - rect.height - margin);
+  panel.classList.add('info-dragged');
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+  panel.style.transform = 'none';
+}
+
+function placeInfoModal(){
+  const panel = document.getElementById('info-panel');
+  if(!panel || !isMobileInfoModal()) return;
+  const saved = localStorage.getItem('goodseed_info_modal_pos');
+  panel.classList.remove('info-dragging');
+  if(saved){
+    try{
+      const pos = JSON.parse(saved);
+      panel.classList.add('info-dragged');
+      panel.style.left = (pos.left || 24) + 'px';
+      panel.style.top = (pos.top || 120) + 'px';
+      panel.style.transform = 'none';
+      requestAnimationFrame(clampInfoModalToViewport);
+      return;
+    }catch(e){}
+  }
+  panel.classList.remove('info-dragged');
+  panel.style.left = '50%';
+  panel.style.top = '50%';
+  panel.style.transform = 'translate(-50%, -50%)';
+}
+
 function showInfo(type, name, note) {
   document.getElementById('ip-type').textContent = type;
   document.getElementById('ip-name').textContent = name;
-  document.getElementById('ip-note').innerHTML   = note.replace(/\n/g,'<br>');
-  document.getElementById('info-panel').style.display = 'block';
+  document.getElementById('ip-note').innerHTML   = String(note || '').replace(/\n/g,'<br>');
+  const infoPanel = document.getElementById('info-panel');
+  const backdrop = document.getElementById('info-backdrop');
+  infoPanel.style.display = 'block';
+  infoPanel.scrollTop = 0;
+  const noteEl = document.getElementById('ip-note');
+  if(noteEl) noteEl.scrollTop = 0;
+  if(isMobileInfoModal() && backdrop){
+    backdrop.classList.add('open');
+    placeInfoModal();
+  } else if(backdrop){
+    backdrop.classList.remove('open');
+    infoPanel.classList.remove('info-dragged','info-dragging');
+    infoPanel.style.left = '';
+    infoPanel.style.top = '';
+    infoPanel.style.transform = '';
+  }
   document.querySelectorAll('.poi-item').forEach(el=>el.classList.remove('active'));
   const el = document.querySelector(`[data-name="${CSS.escape(name)}"]`);
   if(el){el.classList.add('active');el.scrollIntoView({block:'nearest',behavior:'smooth'});}
 }
+
+(function initInfoModalDrag(){
+  const panel = document.getElementById('info-panel');
+  if(!panel || panel.dataset.dragInit === '1') return;
+  panel.dataset.dragInit = '1';
+  let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+  function isDragHandle(target){
+    return !!(target && (target.closest('#ip-type') || target.closest('#ip-name')));
+  }
+
+  panel.addEventListener('pointerdown', function(e){
+    if(!isMobileInfoModal()) return;
+    if(e.target.closest('.ip-close,.ip-action-btn')) return;
+    if(!isDragHandle(e.target)) return;
+    const rect = panel.getBoundingClientRect();
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+    panel.classList.add('info-dragged','info-dragging');
+    panel.style.left = startLeft + 'px';
+    panel.style.top = startTop + 'px';
+    panel.style.transform = 'none';
+    document.body.classList.add('info-modal-dragging');
+    try{ panel.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+
+  panel.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    const margin = 8;
+    const rect = panel.getBoundingClientRect();
+    let left = startLeft + (e.clientX - startX);
+    let top = startTop + (e.clientY - startY);
+    left = Math.min(Math.max(left, margin), window.innerWidth - rect.width - margin);
+    top = Math.min(Math.max(top, margin), window.innerHeight - rect.height - margin);
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    e.preventDefault();
+  });
+
+  function stopDrag(e){
+    if(!dragging) return;
+    dragging = false;
+    panel.classList.remove('info-dragging');
+    document.body.classList.remove('info-modal-dragging');
+    const rect = panel.getBoundingClientRect();
+    localStorage.setItem('goodseed_info_modal_pos', JSON.stringify({left: Math.round(rect.left), top: Math.round(rect.top)}));
+    if(e && e.pointerId !== undefined){ try{ panel.releasePointerCapture(e.pointerId); }catch(err){} }
+  }
+  panel.addEventListener('pointerup', stopDrag);
+  panel.addEventListener('pointercancel', stopDrag);
+  window.addEventListener('resize', clampInfoModalToViewport);
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeInfoModal(); });
+})();
 
 
 
@@ -1956,6 +2510,8 @@ function makeDraggable(panelId, headerId, opts){
   const hd=document.getElementById(headerId);
   if(!el||!hd) return;
   opts=opts||{};
+  // 모바일에서 접기/닫기/저장 버튼은 드래그로 인식하지 않게 제외
+  const ignoreSelector = opts.ignoreSelector || '.fp-controls, .fp-btn, button, input, select, textarea, label, a';
   // Leaflet 이벤트 버블링 차단
   if(window.L&&L.DomEvent){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }
   let ox=0,oy=0,mx=0,my=0,dragging=false;
@@ -1974,26 +2530,29 @@ function makeDraggable(panelId, headerId, opts){
   function moveDrag(x,y){
     if(!dragging) return;
     const wrap=document.getElementById('map-wrap');
-    const maxX=wrap.clientWidth-el.offsetWidth-4;
-    const maxY=wrap.clientHeight-el.offsetHeight-4;
+    const maxX=Math.max(4, wrap.clientWidth-el.offsetWidth-4);
+    const maxY=Math.max(4, wrap.clientHeight-el.offsetHeight-4);
+    el.style.right=''; el.style.bottom='';
     el.style.left=Math.max(4,Math.min(maxX,ox+(x-mx)))+'px';
     el.style.top=Math.max(4,Math.min(maxY,oy+(y-my)))+'px';
   }
   function endDrag(){ dragging=false; hd.style.cursor='move'; }
   hd.addEventListener('mousedown',e=>{
-    if(opts.ignoreSelector && e.target.closest(opts.ignoreSelector)) return;
+    if(e.target.closest(ignoreSelector)) return;
     startDrag(e.clientX,e.clientY); e.preventDefault();
   });
   document.addEventListener('mousemove',e=>moveDrag(e.clientX,e.clientY));
   document.addEventListener('mouseup',endDrag);
   hd.addEventListener('touchstart',e=>{
-    if(opts.ignoreSelector && e.target.closest(opts.ignoreSelector)) return;
+    if(e.target.closest(ignoreSelector)) return;
     const t=e.touches[0]; startDrag(t.clientX,t.clientY);
-  },{passive:true});
+    e.preventDefault();
+  },{passive:false});
   document.addEventListener('touchmove',e=>{
     if(!dragging) return;
     const t=e.touches[0]; moveDrag(t.clientX,t.clientY);
-  },{passive:true});
+    e.preventDefault();
+  },{passive:false});
   document.addEventListener('touchend',endDrag);
 }
 
@@ -2001,7 +2560,32 @@ function makeDraggable(panelId, headerId, opts){
 makeDraggable('criteria-panel','criteria-header');
 makeDraggable('analyze-panel','analyze-header');
 makeDraggable('ridge-panel','ridge-header');
+
 makeDraggable('draw-panel','draw-header');
+
+// 모바일 터치 보정: 그림판 헤더 안의 저장/접기/닫기 버튼은 드래그보다 클릭을 우선 처리
+(function fixDrawHeaderButtonsForMobile(){
+  const collapseBtn = document.getElementById('draw-collapse-btn');
+  const closeBtn = document.querySelector('#draw-header .fp-controls .fp-btn:last-child');
+  const saveBtn = document.querySelector('#draw-header .fp-controls .fp-btn:first-child');
+
+  function bindTouchClick(btn, fn){
+    if(!btn || btn.dataset.mobileTouchFixed === '1') return;
+    btn.dataset.mobileTouchFixed = '1';
+    btn.addEventListener('touchstart', function(e){
+      e.stopPropagation();
+    }, {passive:true});
+    btn.addEventListener('touchend', function(e){
+      e.stopPropagation();
+      e.preventDefault();
+      fn();
+    }, {passive:false});
+  }
+
+  bindTouchClick(collapseBtn, function(){ fpCollapse('draw'); });
+  bindTouchClick(closeBtn, function(){ toggleDrawPanel(); });
+  bindTouchClick(saveBtn, function(){ exportDrawing(); });
+})();
 
 function toggleCrit(row){ /* 클릭 토글 비활성화 — 분석 결과만 표시 */ }
 
@@ -2401,36 +2985,100 @@ function _syncToggleBtn(){
   if(sb&&btn&&!_sidebarCollapsed) btn.style.left = sb.offsetWidth+'px';
 }
 
-// ── 사이드바 리사이저
+// ── 사이드바 리사이저 (PC 마우스 + 모바일 손가락 드래그)
 (function(){
   const sb=document.getElementById('sidebar');
   const rz=document.getElementById('sidebar-resizer');
   const bar=document.getElementById('search-bar');
   if(!sb||!rz) return;
-  let dragging=false,startX=0,startW=0;
-  rz.addEventListener('mousedown',e=>{
-    dragging=true; startX=e.clientX; startW=sb.offsetWidth;
+
+  let dragging=false, startX=0, startW=0, raf=0;
+
+  function isMobile(){ return window.innerWidth <= 768; }
+  function minW(){ return isMobile() ? 44 : 160; }
+  function maxW(){ return isMobile() ? Math.min(360, Math.round(window.innerWidth*0.85)) : 520; }
+  function getClientX(e){
+    if(e.touches && e.touches[0]) return e.touches[0].clientX;
+    if(e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].clientX;
+    return e.clientX;
+  }
+  function applyWidth(w){
+    w=Math.min(maxW(), Math.max(minW(), w));
+    sb.classList.remove('collapsed');
+    _sidebarCollapsed=false;
+    sb.style.width=w+'px';
+    sb.style.minWidth=minW()+'px';
+    sb.style.maxWidth=maxW()+'px';
+    if(bar) bar.style.left=(w+15)+'px';
+    if(typeof _syncToggleBtn==='function') _syncToggleBtn();
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(()=>{ if(typeof map!=='undefined' && map) map.invalidateSize(); });
+    try{ localStorage.setItem('goodseed_sidebar_width', String(w)); }catch(e){}
+  }
+  function startDrag(e){
+    if(e.button!==undefined && e.button!==0) return;
+    dragging=true;
+    startX=getClientX(e);
+    startW=sb.offsetWidth || parseInt(sb.style.width,10) || 285;
     document.body.style.cursor='col-resize';
     document.body.style.userSelect='none';
+    document.body.classList.add('sidebar-resizing');
+    rz.classList.add('dragging');
+    if(rz.setPointerCapture && e.pointerId!==undefined){ try{ rz.setPointerCapture(e.pointerId); }catch(err){} }
     e.preventDefault();
-  });
-  document.addEventListener('mousemove',e=>{
+    e.stopPropagation();
+  }
+  function moveDrag(e){
     if(!dragging) return;
-    const w=Math.min(520,Math.max(160,startW+(e.clientX-startX)));
-    sb.style.width=w+'px';
-    if(bar) bar.style.left=(w+15)+'px';
-    map&&map.invalidateSize();
-    if(typeof _syncToggleBtn==='function') _syncToggleBtn();
-  });
-  document.addEventListener('mouseup',()=>{
+    const dx=getClientX(e)-startX;
+    applyWidth(startW+dx);
+    e.preventDefault();
+  }
+  function endDrag(e){
     if(!dragging) return;
     dragging=false;
     document.body.style.cursor='';
     document.body.style.userSelect='';
-    map&&map.invalidateSize();
-  });
+    document.body.classList.remove('sidebar-resizing');
+    rz.classList.remove('dragging');
+    if(typeof map!=='undefined' && map) map.invalidateSize();
+    if(e && e.preventDefault) e.preventDefault();
+  }
+
+  // 초기 폭 설정
+  // 모바일에서는 첫 화면을 넓게 가리지 않도록 기본값을 화면의 1/3로 시작
+  // PC에서는 기존 저장 폭을 복원
+  try{
+    const saved=parseInt(localStorage.getItem('goodseed_sidebar_width'),10);
+    setTimeout(()=>{
+      if(isMobile()){
+        applyWidth(Math.round(window.innerWidth / 3));
+      } else if(saved && !isNaN(saved)){
+        applyWidth(saved);
+      }
+    }, 50);
+  }catch(e){
+    setTimeout(()=>{ if(isMobile()) applyWidth(Math.round(window.innerWidth / 3)); }, 50);
+  }
+
+  rz.addEventListener('pointerdown', startDrag, {passive:false});
+  document.addEventListener('pointermove', moveDrag, {passive:false});
+  document.addEventListener('pointerup', endDrag, {passive:false});
+  document.addEventListener('pointercancel', endDrag, {passive:false});
+
+  // 일부 모바일 브라우저 보조 처리
+  rz.addEventListener('touchstart', startDrag, {passive:false});
+  document.addEventListener('touchmove', moveDrag, {passive:false});
+  document.addEventListener('touchend', endDrag, {passive:false});
+
+  // 더블탭/더블클릭: 접기·펼치기
+  rz.addEventListener('dblclick', e=>{ toggleSidebar(); e.preventDefault(); });
+
   rz.addEventListener('mouseover',()=>rz.style.background='#0ea5e9');
-  rz.addEventListener('mouseout',()=>{ if(!dragging) rz.style.background='transparent'; });
+  rz.addEventListener('mouseout',()=>{ if(!dragging) rz.style.background=isMobile()?'rgba(30,41,59,0.16)':'transparent'; });
+  window.addEventListener('resize',()=>{
+    if(!_sidebarCollapsed) applyWidth(Math.min(sb.offsetWidth||285, maxW()));
+  });
 })();
 
 window.addEventListener('load', async ()=>{
@@ -3942,6 +4590,15 @@ document.addEventListener('DOMContentLoaded',()=>{
       setDrawActive(false);
     } else {
       p.classList.add('open');
+      // 모바일에서는 이전 드래그 위치/긴 가로폭 때문에 패널이 잘리지 않도록 화면 안으로 고정
+      if (window.matchMedia && window.matchMedia('(max-width: 600px)').matches) {
+        p.style.left = '8px';
+        p.style.right = '8px';
+        p.style.top = '96px';
+        p.style.width = 'calc(100vw - 16px)';
+        p.style.minWidth = '0';
+        p.style.maxWidth = 'calc(100vw - 16px)';
+      }
       btn.style.color='#fff'; btn.style.background='#7c3aed';
       initCanvases();
       setDrawActive(true);
