@@ -2862,6 +2862,8 @@ async function analyzeGeonCheonri(existTurbines){
 
   // 페이지 로드 시 localStorage 복원
   function restoreGeoLayersFromLS(){
+    const m = window._leafletMap;
+    if(!m){ setTimeout(restoreGeoLayersFromLS, 300); return; }
     try{
       const raw=localStorage.getItem(LS_KEY);
       if(!raw) return;
@@ -2870,18 +2872,18 @@ async function analyzeGeonCheonri(existTurbines){
       data.forEach(item=>{
         if(!item.geojson) return;
         const layer=buildLayer(item.geojson, item.color);
-        if(item.visible!==false) layer.addTo(map);
+        if(item.visible!==false) layer.addTo(m);
         geoLayers.push({name:item.name, layer, color:item.color, visible:item.visible!==false, geojson:item.geojson});
         colorIdx++;
       });
       if(geoLayers.length){
         renderGeoFileList();
         const panel=document.getElementById('geofile-panel');
-        if(panel){ panel.style.display=''; makeDraggable('geofile-panel','geofile-header'); }
+        if(panel){ panel.style.display='flex'; makeDraggable('geofile-panel','geofile-header'); }
       }
     }catch(e){ console.warn('GeoLayer LS 복원 실패:',e); }
   }
-  setTimeout(restoreGeoLayersFromLS, 500);
+  setTimeout(restoreGeoLayersFromLS, 800);
 
   function kmlToGeoJSON(kmlText){
     const parser = new DOMParser();
@@ -2945,13 +2947,14 @@ async function analyzeGeonCheonri(existTurbines){
       if(!gj||(!gj.features&&gj.type!=='Feature')){ alert(name+': 유효한 데이터 없음'); return; }
       const color=COLORS[colorIdx++%COLORS.length];
       const layer=buildLayer(gj, color);
-      layer.addTo(map);
-      try{ map.fitBounds(layer.getBounds(),{padding:[30,30]}); }catch(e){}
+      const m=window._leafletMap;
+      layer.addTo(m);
+      try{ m.fitBounds(layer.getBounds(),{padding:[30,30]}); }catch(e){}
       geoLayers.push({name, layer, color, visible:true, geojson:gj});
       saveGeoLayersToLS();
       renderGeoFileList();
       const panel=document.getElementById('geofile-panel');
-      if(panel){ panel.style.display=''; makeDraggable('geofile-panel','geofile-header'); }
+      if(panel){ panel.style.display='flex'; makeDraggable('geofile-panel','geofile-header'); }
     };
     reader.readAsText(file);
   }
@@ -2976,13 +2979,13 @@ async function analyzeGeonCheonri(existTurbines){
   window.toggleGeoLayer=function(i){
     const g=geoLayers[i]; if(!g) return;
     g.visible=!g.visible;
-    g.visible?map.addLayer(g.layer):map.removeLayer(g.layer);
+    const _m=window._leafletMap; g.visible?_m.addLayer(g.layer):_m.removeLayer(g.layer);
     saveGeoLayersToLS();
     renderGeoFileList();
   };
   window.removeGeoLayer=function(i){
     const g=geoLayers[i]; if(!g) return;
-    map.removeLayer(g.layer);
+    (window._leafletMap).removeLayer(g.layer);
     geoLayers.splice(i,1);
     saveGeoLayersToLS();
     renderGeoFileList();
