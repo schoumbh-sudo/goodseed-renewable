@@ -788,6 +788,11 @@
             <span class="pm-name">⛰ 음영기복도 (능선 윤곽)</span>
             <span class="pm-badge" id="pm-hillshade-badge">OFF</span>
           </div>
+          <div class="pm-row" id="pm-r-cadastral" onclick="pmToggleCadastral()">
+            <span class="pm-eye" id="pm-cadastral-eye">👁</span><div class="pm-thumb" style="background:#4a2f1a;">▦</div>
+            <span class="pm-name">지적도 API / 필지경계</span>
+            <span class="pm-badge" id="pm-cadastral-badge">OFF</span>
+          </div>
           <div class="pm-row" id="pm-r-baekdu" onclick="pmToggleBaekdu()">
             <span class="pm-eye" id="pm-baekdu-eye">👁</span><div class="pm-thumb" style="background:#3a1a4a;">🏔</div>
             <span class="pm-name">백두대간 보호구역</span>
@@ -843,6 +848,7 @@
             <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;flex-shrink:0;"></div><span>주거지 200m 기준</span></div>
             <div class="leg-row"><div class="leg-sq" style="background:rgba(130,60,180,0.35);border:2px solid #7c3aed;flex-shrink:0;"></div><span>백두대간 보호구역</span></div>
             <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.2);border:1px solid #94a3b8;flex-shrink:0;"></div><span>등고선 지도(참고)</span></div>
+            <div class="leg-row"><div class="leg-sq" style="background:rgba(255,210,80,0.12);border:2px solid #f59e0b;flex-shrink:0;"></div><span>지적도 API / 필지경계</span></div>
             <div style="margin-top:10px;border-top:1px solid #444;padding-top:10px;">
               <div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:8px;letter-spacing:0.5px;">투명도 조절</div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
@@ -852,6 +858,13 @@
               <input type="range" id="eco-opacity-slider2" min="0" max="100" value="60"
                 style="width:100%;accent-color:#4ade80;margin-bottom:8px;"
                 oninput="setEcoOpacity(this.value);document.getElementById('eco-opacity-val2').textContent=this.value+'%';document.getElementById('eco-opacity-val').textContent=this.value+'%';document.getElementById('eco-opacity-slider').value=this.value;"/>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                <span style="font-size:10px;color:#94a3b8;">지적도</span>
+                <span id="cadastral-opacity-val2" style="font-size:10px;color:#94a3b8;">85%</span>
+              </div>
+              <input type="range" id="cadastral-opacity-slider2" min="0" max="100" value="85"
+                style="width:100%;accent-color:#f59e0b;margin-bottom:8px;"
+                oninput="setCadastralOpacity(this.value);document.getElementById('cadastral-opacity-val2').textContent=this.value+'%';document.getElementById('cadastral-opacity-val').textContent=this.value+'%';document.getElementById('cadastral-opacity-slider').value=this.value;"/>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
                 <span style="font-size:10px;color:#94a3b8;">음영기복도</span>
                 <span id="hillshade-opacity-val2" style="font-size:10px;color:#94a3b8;">75%</span>
@@ -893,6 +906,7 @@
       <button onclick="setLayer('mix')">🗺 위성+일반 혼합</button>
       <button onclick="toggleEco()" id="eco-btn">🌿 생태등급 OFF</button>
       <button onclick="toggleContour()" id="contour-btn">📐 등고선 OFF</button>
+      <button onclick="toggleCadastral()" id="cadastral-btn">▦ 지적도 API OFF</button>
       <button onclick="toggleDrawPanel()" id="draw-btn">🖌 그림판</button>
     </div>
 
@@ -1004,6 +1018,7 @@
       <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;"></div><span>주거지 200m 기준</span></div>
       <div class="leg-row"><div class="leg-sq" style="background:rgba(130,60,180,0.35);border:2px solid #7c3aed;"></div><span>백두대간 보호구역</span></div>
       <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.55);border:1px solid #94a3b8;"></div><span>등고선 지도(참고)</span></div>
+      <div class="leg-row"><div class="leg-sq" style="background:rgba(255,210,80,0.12);border:2px solid #f59e0b;"></div><span>지적도 API / 필지경계</span></div>
       <!-- 투명도 슬라이더 -->
       <div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.15);padding-top:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
@@ -1013,6 +1028,13 @@
         <input type="range" id="eco-opacity-slider" min="0" max="100" value="60"
           style="width:100%;accent-color:#4ade80;margin-bottom:8px;"
           oninput="setEcoOpacity(this.value)"/>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+          <span style="font-size:10px;color:#94a3b8;">지적도 투명도</span>
+          <span id="cadastral-opacity-val" style="font-size:10px;color:#94a3b8;">85%</span>
+        </div>
+        <input type="range" id="cadastral-opacity-slider" min="0" max="100" value="85"
+          style="width:100%;accent-color:#f59e0b;margin-bottom:8px;"
+          oninput="setCadastralOpacity(this.value)"/>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
           <span style="font-size:10px;color:#94a3b8;">⛰ 음영기복도 투명도</span>
           <span id="hillshade-opacity-val" style="font-size:10px;color:#94a3b8;">75%</span>
@@ -2319,6 +2341,434 @@ function pmToggleHillshade(){
   if(row) row.classList.toggle('pm-selected',hillshadeOn);
 }
 
+
+// ── 지적도 API / 필지경계 레이어
+// VWorld LX맵(연속지적도/편집지적도) WMS + WFS 속성조회
+// WMS 레이어명: lt_c_landinfobasemap / WFS TYPENAME: lt_c_landinfobasemap
+let cadastralOn = false;
+let cadastralLayer = null;
+let cadastralClickMarker = null;
+let cadastralVectorGroup = L.layerGroup();
+let cadastralMoveTimer = null;
+let cadastralVectorLoading = false;
+
+function _syncCadastralUI(){
+  const btn = document.getElementById('cadastral-btn');
+  const eye = document.getElementById('pm-cadastral-eye');
+  const badge = document.getElementById('pm-cadastral-badge');
+  const row = document.getElementById('pm-r-cadastral');
+  if(btn){
+    btn.textContent = '▦ 지적도 API ' + (cadastralOn ? 'ON' : 'OFF');
+    btn.style.color = cadastralOn ? '#dc2626' : '#475569';
+    btn.style.background = cadastralOn ? '#fff7ed' : '';
+  }
+  if(eye) eye.classList.toggle('on', cadastralOn);
+  if(badge){
+    badge.textContent = cadastralOn ? 'ON' : 'OFF';
+    badge.classList.toggle('on', cadastralOn);
+  }
+  if(row) row.classList.toggle('pm-selected', cadastralOn);
+}
+
+function toggleCadastral(){
+  cadastralOn = !cadastralOn;
+
+  if(!cadastralOn){
+    if(cadastralLayer && map.hasLayer(cadastralLayer)) map.removeLayer(cadastralLayer);
+    cadastralLayer = null;
+    if(map.hasLayer(cadastralVectorGroup)) map.removeLayer(cadastralVectorGroup);
+    cadastralVectorGroup.clearLayers();
+    if(cadastralClickMarker){ map.removeLayer(cadastralClickMarker); cadastralClickMarker = null; }
+    _syncCadastralUI();
+    return;
+  }
+
+  const op = (parseInt(document.getElementById('cadastral-opacity-slider')?.value || 85)) / 100;
+
+  // 1차: VWorld LX맵(연속지적도) WMS 타일
+  // 일부 환경에서 WMS 타일이 빈 이미지로 내려올 수 있어서, 아래 WFS 벡터 경계도 같이 그린다.
+  cadastralLayer = L.tileLayer.wms(`https://api.vworld.kr/req/wms?Key=${VWORLD_KEY}&`, {
+    layers: 'lt_c_landinfobasemap',
+    styles: 'lt_c_landinfobasemap',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.1',
+    tiled: true,
+    tilesize: 256,
+    opacity: Math.min(1, Math.max(0.35, op)),
+    zIndex: 720,
+    attribution: '© VWorld LX맵 연속지적도'
+  });
+  cadastralLayer.addTo(map);
+  cadastralLayer.bringToFront();
+
+  // 2차: WFS로 실제 필지 경계를 벡터로 그려서, 필지선이 반드시 보이게 함
+  cadastralVectorGroup.addTo(map);
+  loadCadastralVector();
+  _syncCadastralUI();
+}
+
+function pmToggleCadastral(){ toggleCadastral(); }
+
+function setCadastralOpacity(val){
+  const op = parseInt(val) / 100;
+  const v = document.getElementById('cadastral-opacity-val');
+  const v2 = document.getElementById('cadastral-opacity-val2');
+  if(v) v.textContent = val + '%';
+  if(v2) v2.textContent = val + '%';
+  const s1 = document.getElementById('cadastral-opacity-slider');
+  const s2 = document.getElementById('cadastral-opacity-slider2');
+  if(s1 && s1.value != val) s1.value = val;
+  if(s2 && s2.value != val) s2.value = val;
+  if(cadastralLayer && cadastralLayer.setOpacity) cadastralLayer.setOpacity(op);
+}
+
+
+function _parcelLabelFromProps(p){
+  if(!p) return '필지';
+  return p.jibun || p.JIBUN || p.pnu || p.PNU || '필지';
+}
+
+function _scheduleCadastralVectorLoad(){
+  if(!cadastralOn) return;
+  clearTimeout(cadastralMoveTimer);
+  cadastralMoveTimer = setTimeout(loadCadastralVector, 450);
+}
+
+function loadCadastralVector(){
+  if(!cadastralOn || cadastralVectorLoading) return;
+  const zoom = map.getZoom() || 0;
+  cadastralVectorGroup.clearLayers();
+
+  // 너무 넓은 영역은 VWorld WFS가 과부하/빈응답이 되므로 확대 후 표시
+  if(zoom < 13){
+    L.marker(map.getCenter(), {
+      icon: L.divIcon({
+        html:`<div style="background:rgba(15,23,42,.86);color:#fff;padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;border:1px solid rgba(255,255,255,.35);">지적도는 확대하시면 필지경계가 표시됩니다.</div>`,
+        iconSize:[230,26], iconAnchor:[115,13], className:''
+      }), interactive:false, zIndexOffset:850
+    }).addTo(cadastralVectorGroup);
+    return;
+  }
+
+  const b = map.getBounds();
+  const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+  const cb = '_vwCadastralVectorCb_' + Date.now();
+  const oldParse = window.parseResponse;
+  cadastralVectorLoading = true;
+
+  function cleanup(){
+    const sc = document.getElementById(cb);
+    if(sc) sc.remove();
+    delete window[cb];
+    if(oldParse) window.parseResponse = oldParse;
+    else { try{ delete window.parseResponse; }catch(e){ window.parseResponse = undefined; } }
+    cadastralVectorLoading = false;
+  }
+
+  window[cb] = window.parseResponse = function(data){
+    cleanup();
+    if(!cadastralOn) return;
+    const features = data?.features || [];
+    cadastralVectorGroup.clearLayers();
+
+    if(!features.length){
+      L.marker(map.getCenter(), {
+        icon: L.divIcon({
+          html:`<div style="background:rgba(146,64,14,.9);color:#fff;padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">현재 화면에서는 필지경계 응답이 없습니다. 조금 더 확대하거나 지도를 이동해 주십시오.</div>`,
+          iconSize:[285,26], iconAnchor:[142,13], className:''
+        }), interactive:false, zIndexOffset:850
+      }).addTo(cadastralVectorGroup);
+      return;
+    }
+
+    L.geoJSON(features, {
+      style: function(){
+        return {
+          color:'#ff2d2d',
+          weight: zoom >= 16 ? 2.2 : 1.5,
+          opacity:0.95,
+          fill:false,
+          fillOpacity:0,
+          pane:'overlayPane'
+        };
+      },
+      onEachFeature: function(feature, layer){
+        const p = feature.properties || {};
+        layer.bindTooltip(_parcelLabelFromProps(p), {sticky:true, direction:'top'});
+        layer.on('click', function(e){
+          L.DomEvent.stopPropagation(e);
+          openParcelPopupWithLandInfo(e.latlng, p);
+        });
+      }
+    }).addTo(cadastralVectorGroup);
+    cadastralVectorGroup.bringToFront();
+  };
+
+  const script = document.createElement('script');
+  script.id = cb;
+  script.src = `https://api.vworld.kr/req/wfs?SERVICE=WFS&version=1.1.0&request=GetFeature` +
+    `&TYPENAME=lt_c_landinfobasemap&OUTPUT=text/javascript&SRSNAME=EPSG:4326` +
+    `&BBOX=${encodeURIComponent(bbox)}` +
+    `&maxFeatures=700` +
+    `&Key=${encodeURIComponent(VWORLD_KEY)}` +
+    `&callback=${cb}`;
+  script.onerror = function(){ cleanup(); };
+  document.head.appendChild(script);
+}
+
+map.on('moveend zoomend', _scheduleCadastralVectorLoad);
+
+function _safeVal(v){
+  if(v === undefined || v === null || v === '') return '-';
+  return String(v).trim() || '-';
+}
+
+function _firstProp(obj, keys){
+  if(!obj) return '';
+  for(const k of keys){
+    if(obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') return obj[k];
+  }
+  // 대소문자 차이 대응
+  const lowerMap = {};
+  Object.keys(obj).forEach(k=>lowerMap[k.toLowerCase()] = obj[k]);
+  for(const k of keys){
+    const v = lowerMap[String(k).toLowerCase()];
+    if(v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
+function _formatArea(v){
+  if(v === undefined || v === null || v === '') return '-';
+  const n = Number(String(v).replace(/,/g,''));
+  if(!isNaN(n)) return n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '㎡';
+  return String(v);
+}
+
+function _extractLandCharacteristic(raw){
+  if(!raw) return {};
+  const res = raw.response || raw;
+  let item = null;
+  const r = res.result || raw.result || res.fields || raw.fields;
+  if(Array.isArray(r)) item = r[0];
+  else if(r && Array.isArray(r.items)) item = r.items[0];
+  else if(r && Array.isArray(r.landCharacteristic)) item = r.landCharacteristic[0];
+  else if(r && r.landCharacteristic) item = Array.isArray(r.landCharacteristic) ? r.landCharacteristic[0] : r.landCharacteristic;
+  else if(r && typeof r === 'object') item = r;
+  if(!item && res.body && res.body.items) item = Array.isArray(res.body.items) ? res.body.items[0] : res.body.items.item;
+  return item || {};
+}
+
+
+function _extractVworldItem(raw){
+  if(!raw) return {};
+  const candidates = [];
+  function push(v){ if(v !== undefined && v !== null) candidates.push(v); }
+  push(raw);
+  push(raw.response); push(raw.result); push(raw.fields); push(raw.body);
+  push(raw.response?.result); push(raw.response?.fields); push(raw.response?.body);
+  push(raw.body?.items); push(raw.response?.body?.items);
+  push(raw.body?.items?.item); push(raw.response?.body?.items?.item);
+  push(raw.response?.result?.items); push(raw.response?.result?.item);
+  push(raw.landCharacteristic); push(raw.landOwnership); push(raw.landPossession);
+  for(const c of candidates){
+    if(Array.isArray(c) && c.length) return c[0] || {};
+    if(c && Array.isArray(c.items) && c.items.length) return c.items[0] || {};
+    if(c && c.item) return Array.isArray(c.item) ? (c.item[0] || {}) : c.item;
+    if(c && typeof c === 'object' && Object.keys(c).length && !c.header && !c.response) return c;
+  }
+  return {};
+}
+
+async function _fetchJsonWithTimeout(url, timeoutMs){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), timeoutMs || 6500);
+  try{
+    const res = await fetch(url, {signal: ctrl.signal});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const txt = await res.text();
+    try{ return JSON.parse(txt); }
+    catch(e){
+      // XML 형태로 내려오는 경우를 대비해 간단 파싱
+      const doc = new DOMParser().parseFromString(txt, 'text/xml');
+      const out = {};
+      Array.from(doc.getElementsByTagName('*')).forEach(el=>{
+        if(el.children.length === 0 && el.textContent && el.textContent.trim()){
+          out[el.tagName] = el.textContent.trim();
+        }
+      });
+      return out;
+    }
+  } finally { clearTimeout(t); }
+}
+
+async function fetchLandCharacteristicsByPnu(pnu){
+  if(!pnu) return {};
+  const now = new Date().getFullYear();
+  const years = [now, now-1, now-2, now-3];
+  for(const y of years){
+    const urls = [
+      `https://api.vworld.kr/ned/data/getLandCharacteristics?pnu=${encodeURIComponent(pnu)}&stdrYear=${y}&format=json&key=${encodeURIComponent(VWORLD_KEY)}`,
+      `https://api.vworld.kr/ned/data/getLandCharacteristics?pnu=${encodeURIComponent(pnu)}&stdrYear=${y}&format=json&numOfRows=1&pageNo=1&key=${encodeURIComponent(VWORLD_KEY)}`
+    ];
+    for(const url of urls){
+      try{
+        const json = await _fetchJsonWithTimeout(url, 6500);
+        const item = _extractLandCharacteristic(json);
+        if(item && Object.keys(item).length) return item;
+      }catch(e){
+        console.warn('토지특성정보 조회 실패:', e.message);
+      }
+    }
+  }
+  return {};
+}
+
+async function fetchLandOwnershipByPnu(pnu){
+  if(!pnu) return {};
+  // VWorld/국토부 토지소유정보 속성 API. 명세/서비스명이 환경에 따라 달라질 수 있어 후보 URL을 순차 시도한다.
+  const urls = [
+    `https://api.vworld.kr/ned/data/getLandOwnership?pnu=${encodeURIComponent(pnu)}&format=json&numOfRows=1&pageNo=1&key=${encodeURIComponent(VWORLD_KEY)}`,
+    `https://api.vworld.kr/ned/data/getLandOwnship?pnu=${encodeURIComponent(pnu)}&format=json&numOfRows=1&pageNo=1&key=${encodeURIComponent(VWORLD_KEY)}`,
+    `https://api.vworld.kr/ned/data/getLandPossession?pnu=${encodeURIComponent(pnu)}&format=json&numOfRows=1&pageNo=1&key=${encodeURIComponent(VWORLD_KEY)}`,
+    `https://api.vworld.kr/ned/data/getLandPossessionInfo?pnu=${encodeURIComponent(pnu)}&format=json&numOfRows=1&pageNo=1&key=${encodeURIComponent(VWORLD_KEY)}`
+  ];
+  for(const url of urls){
+    try{
+      const json = await _fetchJsonWithTimeout(url, 6500);
+      const item = _extractVworldItem(json);
+      const owner = _firstProp(item, [
+        'posesnSeCodeNm','posesnSeNm','ownshipCodeNm','ownerSeCodeNm','ownGbnNm','own_gbn_nm',
+        'posesn_se_code_nm','ownship_code_nm','OWNER_GBN','A17','a17','소유구분','소유상태','소유현황'
+      ]);
+      if(owner || (item && Object.keys(item).length)) return item;
+    }catch(e){
+      console.warn('토지소유정보 조회 실패:', e.message);
+    }
+  }
+  return {};
+}
+
+function _ownerFromOwnership(own){
+  return _firstProp(own, [
+    'posesnSeCodeNm','posesnSeNm','ownshipCodeNm','ownerSeCodeNm','ownGbnNm','own_gbn_nm',
+    'posesn_se_code_nm','ownship_code_nm','OWNER_GBN','A17','a17','소유구분','소유상태','소유현황'
+  ]);
+}
+
+function _parcelMergedInfo(p, lc, own){
+  lc = lc || {};
+  own = own || {};
+  return {
+    address: [p.sido_nm,p.sgg_nm,p.emd_nm,p.ri_nm].filter(Boolean).join(' '),
+    jibun: _firstProp(p, ['jibun','JIBUN']),
+    jimok: _firstProp(p, ['jimok','JIMOK','jimokNm','lndcgrCodeNm','lndcgrNm']) || _firstProp(lc, ['lndcgrCodeNm','lndcgrNm','jimok','jimokNm']),
+    area: _firstProp(lc, ['lndpclAr','lndpclArea','ladArea','pnuArea','area','parea']) || _firstProp(p, ['parea','PAREA','area','shape_area','a0']),
+    owner: _ownerFromOwnership(own) || _firstProp(lc, ['posesnSeCodeNm','ownshipCodeNm','ownerSeCodeNm','posesnSeNm','own_gbn_nm','ownGbnNm','own_gbn','ownGbn']) || _firstProp(p, ['own_gbn_nm','ownGbnNm','posesnSeCodeNm','ownshipCodeNm']),
+    height: _firstProp(lc, ['tpgrphHgCodeNm','tpgrphHgNm','tpgrph_hg_nm','landHgNm','hgNm','고저']) || _firstProp(p, ['tpgrph_hg_nm','tpgrphHgNm']),
+    shape: _firstProp(lc, ['tpgrphFrmCodeNm','tpgrphFrmNm','tpgrph_frm_nm','landFrmNm','frmNm','형상']) || _firstProp(p, ['tpgrph_frm_nm','tpgrphFrmNm']),
+    road: _firstProp(lc, ['roadSideCodeNm','roadSideNm','road_side_nm','roadCndNm','도로조건']) || _firstProp(p, ['road_side_nm','roadSideNm'])
+  };
+}
+
+function _parcelHtml(p, lc, own){
+  if(!p) return '필지 속성 없음';
+  const info = _parcelMergedInfo(p, lc || {}, own || {});
+  return `<div style="font-size:12px;line-height:1.75;min-width:230px;">
+    <div style="font-weight:800;color:#f1f5f9;margin-bottom:6px;">▦ 필지 정보</div>
+    <div><b>주소</b> : ${_safeVal(info.address)}</div>
+    <div><b>지번</b> : ${_safeVal(info.jibun)}</div>
+    <div><b>지목</b> : ${_safeVal(info.jimok)}</div>
+    <div><b>면적</b> : ${_formatArea(info.area)}</div>
+    <div><b>소유구분</b> : ${_safeVal(info.owner || '조회할 수 없습니다')}</div>
+    <div><b>고저</b> : ${_safeVal(info.height)}</div>
+    <div><b>형상</b> : ${_safeVal(info.shape)}</div>
+    <div><b>도로조건</b> : ${_safeVal(info.road)}</div>
+  </div>`;
+}
+
+function _parcelLoadingHtml(p){
+  if(!p) return '필지 속성 없음';
+  const basic = _parcelHtml(p, {});
+  return basic.replace('</div>', '<div style="margin-top:7px;color:#94a3b8;font-size:10px;">소유구분·토지특성정보 조회 중...</div></div>');
+}
+
+function openParcelPopupWithLandInfo(latlng, p){
+  const popup = L.popup({className:'geo-popup'})
+    .setLatLng(latlng)
+    .setContent(_parcelLoadingHtml(p))
+    .openOn(map);
+  const pnu = p?.pnu || p?.PNU;
+  Promise.allSettled([
+    fetchLandCharacteristicsByPnu(pnu),
+    fetchLandOwnershipByPnu(pnu)
+  ]).then(results=>{
+    const lc = results[0].status === 'fulfilled' ? results[0].value : {};
+    const own = results[1].status === 'fulfilled' ? results[1].value : {};
+    if(map.hasLayer(popup)) popup.setContent(_parcelHtml(p, lc, own));
+  }).catch(()=>{
+    if(map.hasLayer(popup)) popup.setContent(_parcelHtml(p, {}, {}));
+  });
+}
+
+function fetchParcelByClick(lat, lon){
+  // 클릭점 주변 아주 작은 BBOX로 WFS 속성조회
+  const z = map.getZoom() || 15;
+  const d = Math.max(0.000015, 0.00022 / Math.max(1, z - 8));
+  const bbox = `${lon-d},${lat-d},${lon+d},${lat+d}`;
+  const cb = '_vwParcelCb_' + Date.now();
+  const oldParse = window.parseResponse;
+
+  function cleanup(){
+    const sc = document.getElementById(cb);
+    if(sc) sc.remove();
+    delete window[cb];
+    if(oldParse) window.parseResponse = oldParse;
+    else { try{ delete window.parseResponse; }catch(e){ window.parseResponse = undefined; } }
+  }
+
+  window[cb] = window.parseResponse = function(data){
+    cleanup();
+    const features = data?.features || [];
+    if(!features.length){
+      L.popup({className:'geo-popup'})
+        .setLatLng([lat,lon])
+        .setContent('<div style="font-size:12px;">이 지점의 필지정보를 못 찾았어.<br>조금 더 확대해서 다시 클릭해줘.</div>')
+        .openOn(map);
+      return;
+    }
+    const p = features[0].properties || {};
+    if(cadastralClickMarker) map.removeLayer(cadastralClickMarker);
+    cadastralClickMarker = L.circleMarker([lat,lon],{
+      radius:6, fillColor:'#f59e0b', color:'#fff', weight:2, fillOpacity:0.95, zIndexOffset:900
+    }).addTo(map);
+    openParcelPopupWithLandInfo([lat,lon], p);
+  };
+
+  const script = document.createElement('script');
+  script.id = cb;
+  script.src = `https://api.vworld.kr/req/wfs?SERVICE=WFS&version=1.1.0&request=GetFeature` +
+    `&TYPENAME=lt_c_landinfobasemap&OUTPUT=text/javascript&SRSNAME=EPSG:4326` +
+    `&BBOX=${encodeURIComponent(bbox)}` +
+    `&Key=${encodeURIComponent(VWORLD_KEY)}` +
+    `&callback=${cb}`;
+  script.onerror = function(){
+    cleanup();
+    alert('지적도 WFS 속성조회가 실패했어. VWorld 키의 도메인 허용 또는 트래픽을 확인해야 해.');
+  };
+  document.head.appendChild(script);
+}
+
+// 지적도 ON 상태에서 지도 클릭 시 필지 속성 조회
+map.on('click', function(e){
+  if(!cadastralOn) return;
+  if(typeof clickModeOn !== 'undefined' && clickModeOn) return;
+  if(typeof ridgeDrawMode !== 'undefined' && ridgeDrawMode) return;
+  if(typeof terrainMode !== 'undefined' && terrainMode) return;
+  fetchParcelByClick(e.latlng.lat, e.latlng.lng);
+});
+
 // ── 백두대간 WMS 레이어
 let baekduOn = false;
 let baekduLayers = [];
@@ -3551,7 +4001,7 @@ async function startAnalysis(){
         const avg=allData.reduce((a,b)=>a+b.ws,0)/allData.length;
         windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
       } else {
-        windMs='데이터없음'; windOk=false;
+        windMs='데이터가 없습니다'; windOk=false;
       }
     }
   }catch(e){
@@ -5521,8 +5971,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       const lines = extractRidgeLines(pts, elevMap, step);
 
       if(lines.length === 0){
-        if(typeof setStatus === 'function') setStatus('⚠️ 능선 감지 없음 — 반경을 조절해보세요', 100);
-        setRidgeCriterion(false, '감지없음');
+        if(typeof setStatus === 'function') setStatus('⚠️ 능선이 감지되지 않았습니다. 반경을 조절해 주십시오', 100);
+        setRidgeCriterion(false, '감지되지 않음');
         return;
       }
 
