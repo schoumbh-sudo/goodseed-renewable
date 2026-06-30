@@ -92,7 +92,7 @@
   }
   #layout { display: flex; flex: 1; overflow: hidden; }
   #sidebar { width: 285px; flex-shrink: 0; background: #fff;
-             border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden;
+             border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
              min-width: 160px; max-width: 520px;
              transition: width 0.25s ease, min-width 0.25s ease; }
   #sidebar.collapsed { width: 0 !important; min-width: 0 !important; border-right: none; }
@@ -132,7 +132,7 @@
   .s-loading { color: #92400e; background: #fffbeb; }
   .s-done    { color: #065f46; background: #ecfdf5; }
   .s-error   { color: #991b1b; background: #fef2f2; }
-  #wind-list { flex: 1; overflow-y: auto; }
+  #wind-list { flex: 0 0 auto; overflow: visible; }
   #map-wrap  { flex: 1; position: relative; }
   #map       { width: 100%; height: 100%; }
   /* 기본 커서: 손바닥 (이동 모드) */
@@ -385,6 +385,7 @@
     /* 왼쪽바 전체가 하나로 아래 스크롤되도록 내부 목록 스크롤을 해제 */
     #solar-list,
     #sidebar-saved-list,
+    #ebl-list,
     #wind-list,
     #status-bar,
     #new-wind-list,
@@ -673,6 +674,45 @@
 .geo-popup .leaflet-popup-tip{background:#0f172a;}
 .geo-popup .leaflet-popup-close-button{color:#94a3b8!important;font-size:16px!important;top:6px!important;right:8px!important;}
 .geo-popup .leaflet-popup-close-button:hover{color:#fff!important;}
+
+
+  /* ── 022 수정: 왼쪽 사이드바 전체 스크롤 적용
+     EBL 목록 추가로 메뉴가 길어져도 강원도 터빈 설치현황까지 확인 가능 */
+  #sidebar {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  #solar-list,
+  #sidebar-saved-list,
+  #ebl-list,
+  #wind-list,
+  #status-bar,
+  #new-wind-list,
+  #sidebar .sec-title-lg,
+  #sidebar .sec-title {
+    flex: 0 0 auto !important;
+  }
+  #ebl-list,
+  #wind-list {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  #sidebar::-webkit-scrollbar { width: 7px; }
+  #sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+  #sidebar::-webkit-scrollbar-track { background: #f8fafc; }
+
+
+  /* ── 023 수정: 왼쪽 큰 카테고리 접기/펼치기 */
+  .sec-title-lg.collapsible-title { cursor: pointer; user-select: none; }
+  .sec-title-lg.collapsible-title:hover { background: #d8eefc; }
+  .sec-title-lg .sec-heading-row { display:flex; align-items:center; gap:6px; }
+  .sec-toggle-icon { display:inline-flex; align-items:center; justify-content:center; width:14px; font-size:11px; color:#0c4a6e; transition: transform 0.16s ease; }
+  .sec-title-lg.sec-collapsed .sec-toggle-icon { transform: rotate(-90deg); }
+  .sidebar-section-content { overflow:hidden; max-height: 1600px; transition:max-height 0.22s ease, opacity 0.18s ease; opacity:1; }
+  .sidebar-section-content.collapsed { max-height:0 !important; opacity:0; border-bottom:0 !important; }
+  .sec-title-lg .sec-add-btn { flex-shrink:0; }
+
 </style>
 </head>
 <body>
@@ -691,37 +731,53 @@
 <div id="layout">
   <div id="sidebar">
     <!-- ① 신규 사업지 -->
-    <div class="sec-title-lg">
+    <div class="sec-title-lg collapsible-title" data-section="solar" onclick="toggleSidebarSection('solar')">
       <div>
-        <div>신규 사업지</div>
+        <div class="sec-heading-row"><span class="sec-toggle-icon" id="toggle-icon-solar">▼</span><span>신규 사업지</span></div>
         <div class="sec-sub" id="solar-count-sub">신규 사업부지 3개</div>
       </div>
-      <button class="sec-add-btn" onclick="addSolarSite()" title="사업지 추가">＋ 추가</button>
+      <button class="sec-add-btn" onclick="event.stopPropagation();addSolarSite();" title="사업지 추가">＋ 추가</button>
     </div>
-    <div id="solar-list"></div>
+    <div id="section-solar" class="sidebar-section-content">
+      <div id="solar-list"></div>
+    </div>
 
     <!-- ② 사업지 분석 결과 -->
-    <div class="sec-title-lg">
+    <div class="sec-title-lg collapsible-title" data-section="saved" onclick="toggleSidebarSection('saved')">
       <div>
-        <div>사업지 분석 결과</div>
+        <div class="sec-heading-row"><span class="sec-toggle-icon" id="toggle-icon-saved">▼</span><span>사업지 분석 결과</span></div>
         <div class="sec-sub" id="saved-count-sub">저장된 결과 없음</div>
       </div>
-      <button class="sec-add-btn" onclick="showAddSavedDialog()" title="결과 추가">＋ 추가</button>
+      <button class="sec-add-btn" onclick="event.stopPropagation();showAddSavedDialog();" title="결과 추가">＋ 추가</button>
     </div>
-    <div id="sidebar-saved-list">
-      <div style="padding:8px 14px;font-size:10px;color:#94a3b8;">저장된 결과 없음</div>
+    <div id="section-saved" class="sidebar-section-content">
+      <div id="sidebar-saved-list">
+        <div style="padding:8px 14px;font-size:10px;color:#94a3b8;">저장된 결과 없음</div>
+      </div>
     </div>
 
-    <!-- ③ 강원도 터빈 설치현황 -->
-    <div class="sec-title-lg">
+    <!-- ③ 강원도 EBL현황 -->
+    <div class="sec-title-lg collapsible-title" data-section="ebl" onclick="toggleSidebarSection('ebl')">
       <div>
-        <div>강원도 터빈 설치현황</div>
+        <div class="sec-heading-row"><span class="sec-toggle-icon" id="toggle-icon-ebl">▼</span><span>강원도 EBL현황</span></div>
+        <div class="sec-sub" id="ebl-count-sub">풍력 EBL 불러오는 중</div>
+      </div>
+    </div>
+    <div id="section-ebl" class="sidebar-section-content">
+      <div id="ebl-list"></div>
+    </div>
+
+    <!-- ④ 강원도 터빈 설치현황 -->
+    <div class="sec-title-lg collapsible-title" data-section="wind" onclick="toggleSidebarSection('wind')">
+      <div>
+        <div class="sec-heading-row"><span class="sec-toggle-icon" id="toggle-icon-wind">▼</span><span>강원도 터빈 설치현황</span></div>
         <div class="sec-sub" id="wind-count-sub">풍력터빈 214기 · 29단지</div>
       </div>
-      <button class="sec-add-btn" onclick="addWindSite()" title="단지 추가">＋ 추가</button>
     </div>
-    <div id="status-bar" class="s-loading">⏳ 에너지공단 API 호출 중...</div>
-    <div id="wind-list"></div>
+    <div id="section-wind" class="sidebar-section-content">
+      <div id="status-bar" class="s-loading">⏳ 에너지공단 API 호출 중...</div>
+      <div id="wind-list"></div>
+    </div>
     <!-- 신규풍력터빈 위치도 (숨김 — ID는 JS에서 참조) -->
     <div id="new-wind-list" style="display:none;">
       <div id="nw-item-2"></div>
@@ -844,6 +900,8 @@
             <div class="leg-row"><div class="leg-dot" style="background:#f97316;border:2px solid #ea580c;width:11px;height:11px;flex-shrink:0;"></div><span>대기리 2차 부지 (150MW)</span></div>
             <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;border:2px solid #d97706;flex-shrink:0;"></div><span>태양광 사업부지 마커</span></div>
             <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;flex-shrink:0;"></div><span>풍력발전기 (실제)</span></div>
+      <div class="leg-row"><div class="leg-dot" style="background:#10b981;border:2px solid #065f46;"></div><span>강원도 풍력 EBL</span></div>
+            <div class="leg-row"><div class="leg-dot" style="background:#10b981;border:2px solid #065f46;flex-shrink:0;"></div><span>강원도 풍력 EBL</span></div>
             <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;flex-shrink:0;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
             <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;flex-shrink:0;"></div><span>주거지 200m 기준</span></div>
             <div class="leg-row"><div class="leg-sq" style="background:rgba(130,60,180,0.35);border:2px solid #7c3aed;flex-shrink:0;"></div><span>백두대간 보호구역</span></div>
@@ -1216,6 +1274,36 @@
 </div>
 
 <script>
+
+// ── 023 수정: 왼쪽 카테고리 접기/펼치기
+function toggleSidebarSection(sectionId){
+  const content = document.getElementById('section-' + sectionId);
+  const icon = document.getElementById('toggle-icon-' + sectionId);
+  const title = document.querySelector('.sec-title-lg[data-section="' + sectionId + '"]');
+  if(!content) return;
+  const willCollapse = !content.classList.contains('collapsed');
+  content.classList.toggle('collapsed', willCollapse);
+  if(icon) icon.textContent = willCollapse ? '▶' : '▼';
+  if(title) title.classList.toggle('sec-collapsed', willCollapse);
+  try{ localStorage.setItem('goodseed_sidebar_section_' + sectionId, willCollapse ? 'collapsed' : 'open'); }catch(e){}
+}
+function initSidebarSectionState(){
+  ['solar','saved','ebl','wind'].forEach(id=>{
+    let state = null;
+    try{ state = localStorage.getItem('goodseed_sidebar_section_' + id); }catch(e){}
+    if(state === 'collapsed'){
+      const content = document.getElementById('section-' + id);
+      const icon = document.getElementById('toggle-icon-' + id);
+      const title = document.querySelector('.sec-title-lg[data-section="' + id + '"]');
+      if(content) content.classList.add('collapsed');
+      if(icon) icon.textContent = '▶';
+      if(title) title.classList.add('sec-collapsed');
+    }
+  });
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSidebarSectionState);
+else initSidebarSectionState();
+
 const VWORLD_KEY = 'AACB7420-24B8-351C-A631-53F535081E93';
 const API_KEY    = 'b02836e49fd4425e579a19da6bb135f7a1aa1a03f9fa9f0bd5c37a7bb4b98a62';
 const API_BASE   = 'https://api.odcloud.kr/api/15085304/v1/uddi:1e2ea3c9-17a1-4921-81ac-ed50c5ba3093';
@@ -1317,6 +1405,80 @@ const BASE_OVERLAY = new ContourCanvasLayer({maxZoom:22, maxNativeZoom:19, zInde
 const map = L.map('map').setView([37.55, 128.20], 9);
 window._leafletMap = map;  // 전역 참조용
 LAYERS.satellite.addTo(map);
+
+// ── 강원도 EBL현황(첨부 GeoJSON) — 풍력 EBL 목록/마커
+const GANGWON_WIND_EBL = {"type": "FeatureCollection", "name": "강원도_풍력_발전사업허가", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.7183, 37.687]}, "properties": {"permit_year": "", "no": "3", "name": "강원풍력발전(주)", "address": "강원도 평창군 도암면", "capacity_mw": 98.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.12, 38.26]}, "properties": {"permit_year": "", "no": "2", "name": "한국중부발전(주)", "address": "강원도 양구군 해안면", "capacity_mw": 20.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.22, 37.51]}, "properties": {"permit_year": "", "no": "7", "name": "(주)태기산풍력발전", "address": "강원도 횡성군 둔내면", "capacity_mw": 40.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.83, 37.648]}, "properties": {"permit_year": "", "no": "19", "name": "강릉윈드파워(주)", "address": "강원도 강릉시 왕산면", "capacity_mw": 24.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.975, 37.149]}, "properties": {"permit_year": "", "no": "20", "name": "창죽풍력발전", "address": "강원도 태백시 창죽동", "capacity_mw": 4.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.975, 37.149]}, "properties": {"permit_year": "", "no": "20", "name": "대명지이씨(주)", "address": "강원도 태백시 창죽동", "capacity_mw": 20.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.867, 37.2]}, "properties": {"permit_year": "", "no": "21", "name": "정암풍력발전(주)", "address": "강원도 정선군 고한읍", "capacity_mw": 40.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.975, 37.149]}, "properties": {"permit_year": "", "no": "48", "name": "(주)고원풍력발전", "address": "강원도 태백시 창죽동 산", "capacity_mw": 20.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.075, 37.709]}, "properties": {"permit_year": "", "no": "90", "name": "한국남부발전(주)", "address": "강원도 강릉시 강동면 임곡리", "capacity_mw": 60.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.732, 37.678]}, "properties": {"permit_year": "", "no": "102", "name": "대관령풍력(주)", "address": "강원도 평창군 대관령면", "capacity_mw": 23.1, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.55, 37.36]}, "properties": {"permit_year": "", "no": "105", "name": "평창풍력(주)", "address": "강원도 평창군 미탄면", "capacity_mw": 30.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.47, 38.38]}, "properties": {"permit_year": "", "no": "", "name": "고성알프스풍력", "address": "강원도 고성군 간성읍 흘리 일", "capacity_mw": 0.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.22, 37.51]}, "properties": {"permit_year": "", "no": "", "name": "태기산풍력발전", "address": "강원도 횡성군 둔내면 태기리", "capacity_mw": 40.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.09, 37.162]}, "properties": {"permit_year": "", "no": "9", "name": "한국남부발전", "address": "강원도 삼척시 도계읍 황조리", "capacity_mw": 30.0, "deadline": "2018-06-30"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.82, 37.98]}, "properties": {"permit_year": "", "no": "105", "name": "양양풍력발전", "address": "강원도 양양군 현남면 하월천리", "capacity_mw": 40.0, "deadline": "2019-02-28"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.52, 38.26]}, "properties": {"permit_year": "", "no": "151", "name": "에스디오", "address": "강원도 고성군 토성면 도원리", "capacity_mw": 30.0, "deadline": "2018-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.496, 37.567]}, "properties": {"permit_year": "", "no": "82", "name": "청산풍력발전", "address": "강원도 평창군 봉평면 진조리", "capacity_mw": 29.9, "deadline": "2018-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.96, 37.248]}, "properties": {"permit_year": "", "no": "", "name": "하장3풍력발전", "address": "강원도 삼척시 하장면 판문리", "capacity_mw": 0.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.09, 37.162]}, "properties": {"permit_year": "", "no": "121", "name": "비에스에너지", "address": "강원도 삼척시 도계읍 상덕리", "capacity_mw": 42.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.52, 38.26]}, "properties": {"permit_year": "2016", "no": "", "name": "영동연료전지", "address": "강원도 고성군 토성면 원암리", "capacity_mw": 5.0, "deadline": "2019-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.739, 37.276]}, "properties": {"permit_year": "2019", "no": "93", "name": "지앤이파워", "address": "강원도 정선군 신동읍", "capacity_mw": 22.5, "deadline": "2023-07-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.96, 37.248]}, "properties": {"permit_year": "2016", "no": "10", "name": "어진풍력발전", "address": "강원도 삼척시 하장면", "capacity_mw": 27.0, "deadline": "2021-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.075, 37.709]}, "properties": {"permit_year": "2016", "no": "71", "name": "동성", "address": "강원도 강릉시 강동면", "capacity_mw": 40.0, "deadline": "2021-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.96, 37.248]}, "properties": {"permit_year": "2017", "no": "26", "name": "삼척(추동)", "address": "강원도 삼척시 하장면", "capacity_mw": 57.6, "deadline": "2027-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.67, 37.625]}, "properties": {"permit_year": "2017", "no": "31", "name": "평창운두령풍력", "address": "강원도 평창군 용평면", "capacity_mw": 27.6, "deadline": "2021-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.96, 37.17]}, "properties": {"permit_year": "2016", "no": "56", "name": "하사미풍력", "address": "강원도 태백시 하사미동", "capacity_mw": 18.0, "deadline": "2022-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.96, 37.248]}, "properties": {"permit_year": "2016", "no": "140", "name": "한국동서발전", "address": "강원도 삼척시 하장면", "capacity_mw": 99.0, "deadline": "2024-02-29"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.95, 37.405]}, "properties": {"permit_year": "2016", "no": "178", "name": "명성파워그린", "address": "강원도 정선군 북평면", "capacity_mw": 39.0, "deadline": "2024-06-30"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.496, 37.567]}, "properties": {"permit_year": "2022", "no": "51", "name": "서하에너지", "address": "강원도 평창군 봉평면", "capacity_mw": 8.0, "deadline": "2025-11-30"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [127.82, 37.88]}, "properties": {"permit_year": "2019", "no": "142", "name": "지앤디윈드파워", "address": "강원도 춘천시 동면", "capacity_mw": 40.0, "deadline": "2024-06-30"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.82, 37.38]}, "properties": {"permit_year": "2020", "no": "83", "name": "지앤이윈드파워", "address": "강원도 정선군 화암면", "capacity_mw": 20.0, "deadline": "2028-03-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.43, 37.76]}, "properties": {"permit_year": "2017", "no": "92", "name": "홍천율전풍력", "address": "강원도 홍천군 내면 율전리", "capacity_mw": 68.2, "deadline": "2028-06-30"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.47, 38.52]}, "properties": {"permit_year": "2019", "no": "140", "name": "고성평화풍력", "address": "강원도 고성군 현내면", "capacity_mw": 38.4, "deadline": "2028-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.72, 37.16]}, "properties": {"permit_year": "2020", "no": "125", "name": "제이와이에코", "address": "강원도 영월군 상동읍", "capacity_mw": 37.2, "deadline": "2027-12-31"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.12, 38.26]}, "properties": {"permit_year": "2006", "no": "2", "name": "한국중부발전(반납)", "address": "강원도 양구군 해안면 오", "capacity_mw": 20.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [127.5, 38.22]}, "properties": {"permit_year": "", "no": "11", "name": "한일풍력발전", "address": "강원도 철원군 근남면 육", "capacity_mw": 0.0, "deadline": ""}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.55, 38.1]}, "properties": {"permit_year": "2020", "no": "41", "name": "케이그리드", "address": "강원도 양양군 서면 내현리", "capacity_mw": 71.4, "deadline": "2028-01-31"}}]};
+const eblLayerGroup = L.layerGroup().addTo(map);
+function _fmtMw(v){
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('ko-KR', {maximumFractionDigits: 2}) + 'MW' : '용량 정보 없음';
+}
+function _safeVal(v, fallback){
+  return (v === undefined || v === null || String(v).trim() === '') ? (fallback || '-') : String(v);
+}
+function _eblPopupHtml(p){
+  return `<div style="font-size:12px;line-height:1.7;min-width:190px;">
+    <div style="font-weight:800;font-size:13px;margin-bottom:5px;color:#f8fafc;">${_safeVal(p.name,'풍력 EBL')}</div>
+    <div><b>구분 :</b> 강원도 풍력 EBL</div>
+    <div><b>주소 :</b> ${_safeVal(p.address)}</div>
+    <div><b>설비용량 :</b> ${_fmtMw(p.capacity_mw)}</div>
+    <div><b>허가연도 :</b> ${_safeVal(p.permit_year,'정보 없음')}</div>
+    <div><b>기한 :</b> ${_safeVal(p.deadline,'정보 없음')}</div>
+  </div>`;
+}
+function renderGangwonEbl(){
+  const list = document.getElementById('ebl-list');
+  const sub = document.getElementById('ebl-count-sub');
+  if(!list || !GANGWON_WIND_EBL || !Array.isArray(GANGWON_WIND_EBL.features)) return;
+  list.innerHTML = '';
+  eblLayerGroup.clearLayers();
+  let count = 0;
+  GANGWON_WIND_EBL.features.forEach((f, idx)=>{
+    const p = f.properties || {};
+    const coords = f.geometry && f.geometry.coordinates;
+    if(!coords || coords.length < 2) return;
+    const lon = parseFloat(coords[0]);
+    const lat = parseFloat(coords[1]);
+    if(!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    count++;
+    const name = _safeVal(p.name, '풍력 EBL');
+    const address = _safeVal(p.address, '주소 정보 없음');
+    const cap = _fmtMw(p.capacity_mw);
+    const marker = L.circleMarker([lat, lon], {
+      radius: 7,
+      fillColor: '#10b981',
+      color: '#064e3b',
+      weight: 2,
+      fillOpacity: 0.9,
+      opacity: 1,
+      zIndexOffset: 260
+    }).addTo(eblLayerGroup);
+    marker.bindPopup(_eblPopupHtml(p), {className:'geo-popup'});
+    marker.on('click',()=>{
+      // 강원도 EBL은 지도 기본 팝업(다크 팝업)만 표시하고,
+      // 좌측 하단 흰색 정보 패널은 표시하지 않습니다.
+      if(typeof closeInfoModal === 'function') closeInfoModal();
+    });
+
+    const el = document.createElement('div');
+    el.className = 'poi-item';
+    el.dataset.name = name;
+    el.innerHTML = `<div class="poi-dot" style="background:#10b981;border:2px solid #065f46;"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="poi-name">${name}</div>
+        <div class="poi-sub">${cap} · ${address}</div>
+      </div>`;
+    el.addEventListener('click',()=>{
+      map.flyTo([lat, lon], 13, {duration:1.2});
+      if(typeof closeInfoModal === 'function') closeInfoModal();
+      marker.openPopup();
+    });
+    list.appendChild(el);
+  });
+  if(sub) sub.textContent = `풍력 EBL ${count}건`;
+}
+
+renderGangwonEbl();
 
 // ── 자동 능선 표시 레이어 그룹
 const autoRidgeGroup = L.layerGroup().addTo(map);
@@ -2769,33 +2931,163 @@ map.on('click', function(e){
   fetchParcelByClick(e.latlng.lat, e.latlng.lng);
 });
 
-// ── 백두대간 WMS 레이어
+// ── 백두대간 보호구역 레이어
+// 기존 /api/vworld/wms 프록시 경로는 Netlify 설정이 없으면 표시되지 않아
+// VWorld WMS 직접 호출 + WFS 벡터 보조표시 방식으로 보강합니다.
 let baekduOn = false;
 let baekduLayers = [];
 
-function toggleBaekdu(){
-  baekduOn = !baekduOn;
-  if(!baekduOn){
-    baekduLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
-    baekduLayers = [];
-    return;
+const CRS_EPSG900913 = L.extend({}, L.CRS.EPSG3857, { code: 'EPSG:900913' });
+
+function showBaekduStatus(msg){
+  let box = document.getElementById('baekdu-status-toast');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'baekdu-status-toast';
+    box.style.cssText = `
+      position:absolute;left:50%;top:72px;transform:translateX(-50%);
+      z-index:1500;background:rgba(15,23,42,.92);color:#fff;
+      padding:9px 14px;border-radius:8px;font-size:12px;font-weight:700;
+      box-shadow:0 4px 16px rgba(0,0,0,.28);pointer-events:none;`;
+    document.getElementById('map-wrap').appendChild(box);
   }
-  // Vworld WMS lt_c_uq111 (백두대간 보호구역)
-  const wms = L.tileLayer.wms(
-    `/api/vworld/wms?key=${VWORLD_KEY}&`,{
-    layers:'lt_c_uq111',
-    format:'image/png',
-    transparent:true,
-    version:'1.3.0',
-    opacity:0.55,
-    attribution:'© Vworld 백두대간'
-  });
-  wms.addTo(map);
-  baekduLayers.push(wms);
+  box.textContent = msg;
+  box.style.display = 'block';
+  clearTimeout(window._baekduToastTimer);
+  window._baekduToastTimer = setTimeout(()=>{ box.style.display='none'; }, 2200);
 }
 
-function pmToggleBaekdu(){
-  toggleBaekdu();
+function clearBaekduLayers(){
+  baekduLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
+  baekduLayers = [];
+}
+
+function createBaekduWmsLayer(){
+  const host = encodeURIComponent(location.hostname || location.host || '');
+  // VWorld WMS 공식 레이어명 : lt_c_uq111
+  // EPSG:900913로 요청해야 일부 환경에서 정상 표시됩니다.
+  return L.tileLayer.wms(`https://api.vworld.kr/req/wms?key=${VWORLD_KEY}&domain=${host}&`, {
+    service: 'WMS',
+    request: 'GetMap',
+    layers: 'lt_c_uq111',
+    styles: 'lt_c_uq111',
+    format: 'image/png',
+    transparent: true,
+    version: '1.3.0',
+    crs: CRS_EPSG900913,
+    opacity: 0.65,
+    attribution: '© VWorld 백두대간 보호구역'
+  });
+}
+
+function parseVworldFeatureGeometry(f){
+  const g = f && f.geometry;
+  if(!g || !g.coordinates) return [];
+  const type = g.type;
+  if(type === 'Polygon') return [g.coordinates];
+  if(type === 'MultiPolygon') return g.coordinates;
+  return [];
+}
+
+function addBaekduVectorFeatures(features){
+  if(!features || !features.length) return 0;
+  let added = 0;
+  features.forEach(f=>{
+    const props = f.properties || {};
+    const polys = parseVworldFeatureGeometry(f);
+    polys.forEach(poly=>{
+      const latlngs = poly.map(ring => ring.map(c => [c[1], c[0]]));
+      const layer = L.polygon(latlngs, {
+        color:'#7c3aed',
+        weight:2,
+        fillColor:'#8b5cf6',
+        fillOpacity:0.22,
+        opacity:0.95,
+        interactive:true
+      }).bindPopup(`
+        <div style="font-size:12px;line-height:1.7;min-width:180px;">
+          <div style="font-weight:800;font-size:13px;margin-bottom:5px;">백두대간 보호구역</div>
+          <div><b>구분 :</b> ${props.uname || props.UNAME || props.dname || '보호구역'}</div>
+          <div><b>시도 :</b> ${props.sido_name || props.SIDO_NAME || '-'}</div>
+          <div><b>시군구 :</b> ${props.sigg_name || props.SIGG_NAME || '-'}</div>
+        </div>`, {className:'geo-popup'});
+      layer.addTo(map);
+      baekduLayers.push(layer);
+      added++;
+    });
+  });
+  return added;
+}
+
+function fetchBaekduWfsVisible(){
+  return new Promise(resolve=>{
+    const b = map.getBounds();
+    const cb = '_baekduWfsCb_' + Date.now();
+    // VWorld WFS EPSG:4326 bbox는 ymin,xmin,ymax,xmax 순서가 안전합니다.
+    const bbox = [
+      b.getSouth().toFixed(6),
+      b.getWest().toFixed(6),
+      b.getNorth().toFixed(6),
+      b.getEast().toFixed(6)
+    ].join(',');
+
+    window[cb] = function(data){
+      try{
+        const features = data && (data.features || data.response?.result?.featureCollection?.features) || [];
+        const added = addBaekduVectorFeatures(features);
+        resolve(added);
+      }catch(e){
+        console.warn('백두대간 WFS 처리 오류:', e);
+        resolve(0);
+      }finally{
+        const s = document.getElementById('_baekdu_wfs_script');
+        if(s) s.remove();
+        delete window[cb];
+      }
+    };
+
+    const script = document.createElement('script');
+    script.id = '_baekdu_wfs_script';
+    script.src = `https://api.vworld.kr/req/wfs?service=WFS&request=GetFeature&version=1.1.0` +
+      `&typename=lt_c_uq111&srsname=EPSG:4326&bbox=${bbox}` +
+      `&output=text/javascript&format_options=callback:${cb}` +
+      `&maxfeatures=1000&key=${VWORLD_KEY}&domain=${encodeURIComponent(location.hostname || location.host || '')}`;
+    script.onerror = ()=>{
+      console.warn('백두대간 WFS 호출 실패');
+      const s = document.getElementById('_baekdu_wfs_script');
+      if(s) s.remove();
+      delete window[cb];
+      resolve(0);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function toggleBaekdu(){
+  baekduOn = !baekduOn;
+
+  if(!baekduOn){
+    clearBaekduLayers();
+    return;
+  }
+
+  clearBaekduLayers();
+  showBaekduStatus('백두대간 보호구역을 불러오는 중입니다.');
+
+  const wms = createBaekduWmsLayer();
+  wms.on('tileerror', () => console.warn('백두대간 WMS 타일 오류'));
+  wms.addTo(map);
+  baekduLayers.push(wms);
+
+  // WMS가 도메인/축척 문제로 안 보이는 경우를 대비해 현재 화면 범위 WFS 벡터도 함께 표시합니다.
+  const added = await fetchBaekduWfsVisible();
+  if(baekduOn){
+    showBaekduStatus(added > 0 ? `백두대간 보호구역 ${added}개 영역을 표시했습니다.` : '백두대간 WMS를 표시했습니다. 더 확대하거나 지역을 이동해 확인해 주세요.');
+  }
+}
+
+async function pmToggleBaekdu(){
+  await toggleBaekdu();
   const eye   = document.getElementById('pm-baekdu-eye');
   const badge = document.getElementById('pm-baekdu-badge');
   const row   = document.getElementById('pm-r-baekdu');
@@ -2803,6 +3095,16 @@ function pmToggleBaekdu(){
   if(badge){ badge.textContent = baekduOn?'ON':'OFF'; badge.classList.toggle('on', baekduOn); }
   if(row)   row.classList.toggle('pm-selected', baekduOn);
 }
+
+// 백두대간 ON 상태에서 지도를 이동/확대하면 현재 화면 기준 벡터를 다시 조회합니다.
+map.on('moveend zoomend', async ()=>{
+  if(!baekduOn) return;
+  // WMS 1개는 유지하고 벡터만 갱신합니다.
+  const wmsLayers = baekduLayers.filter(l => l && l.getTileUrl);
+  baekduLayers.filter(l => !(l && l.getTileUrl)).forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
+  baekduLayers = wmsLayers;
+  await fetchBaekduWfsVisible();
+});
 
 function setHillshadeOpacity(val){
   const op = parseInt(val)/100;
