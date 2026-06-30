@@ -854,11 +854,6 @@
             <span class="pm-name">백두대간 보호구역</span>
             <span class="pm-badge" id="pm-baekdu-badge">OFF</span>
           </div>
-          <div class="pm-row" id="pm-r-cnt" onclick="pmToggleCnt()">
-            <span class="pm-eye" id="pm-cnt-eye">👁</span><div class="pm-thumb" style="background:#3a3a5a;">📐</div>
-            <span class="pm-name">등고선</span>
-            <span class="pm-badge" id="pm-cnt-badge">OFF</span>
-          </div>
         </div>
 
         <!-- 패널 탭 -->
@@ -895,19 +890,7 @@
         <!-- 범례 탭 -->
         <div id="pm-legend" class="pm-content">
           <div style="padding:10px 12px;">
-            <div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:8px;letter-spacing:0.5px;">마커 범례</div>
-            <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;border:2px solid #d97706;width:14px;height:14px;flex-shrink:0;"></div><span>대기리 1차 부지 (150MW)</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#f97316;border:2px solid #ea580c;width:11px;height:11px;flex-shrink:0;"></div><span>대기리 2차 부지 (150MW)</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;border:2px solid #d97706;flex-shrink:0;"></div><span>태양광 사업부지 마커</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#3b82f6;border:2px solid #1d4ed8;flex-shrink:0;"></div><span>풍력발전기 (실제)</span></div>
-      <div class="leg-row"><div class="leg-dot" style="background:#10b981;border:2px solid #065f46;"></div><span>강원도 풍력 EBL</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#10b981;border:2px solid #065f46;flex-shrink:0;"></div><span>강원도 풍력 EBL</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#ef4444;border:2px solid #fff;flex-shrink:0;"></div><span>신규터빈 후보 (8항목 통과)</span></div>
-            <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;border:2px solid #fff;flex-shrink:0;"></div><span>주거지 200m 기준</span></div>
-            <div class="leg-row"><div class="leg-sq" style="background:rgba(130,60,180,0.35);border:2px solid #7c3aed;flex-shrink:0;"></div><span>백두대간 보호구역</span></div>
-            <div class="leg-row"><div class="leg-sq" style="background:rgba(255,255,255,0.2);border:1px solid #94a3b8;flex-shrink:0;"></div><span>등고선 지도(참고)</span></div>
-            <div class="leg-row"><div class="leg-sq" style="background:rgba(255,210,80,0.12);border:2px solid #f59e0b;flex-shrink:0;"></div><span>지적도 API / 필지경계</span></div>
-            <div style="margin-top:10px;border-top:1px solid #444;padding-top:10px;">
+            <div style="margin-top:0;padding-top:0;">
               <div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:8px;letter-spacing:0.5px;">투명도 조절</div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
                 <span style="font-size:10px;color:#94a3b8;">법적환경규제</span>
@@ -1117,7 +1100,7 @@
         </div>
       </div>
       <div class="fp-body" id="criteria-body">
-        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">① 풍속 <b>6m/s 이상</b></span><span class="crit-src">기상청 WindProfiler</span></div>
+        <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">① 풍속 <b>5.7m/s 이상</b></span><span class="crit-src">기상청 WindProfiler</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">② 백두대간 보호구역 <b>미저촉</b></span><span class="crit-src">Vworld WFS</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">③ 생태자연도 1등급 <b>미저촉</b></span><span class="crit-src">에코뱅크 WFS</span></div>
         <div class="crit-row" onclick="toggleCrit(this)"><span class="crit-status crit-pend">-</span><span class="crit-label">④ 해발고도 <b>500m 이상</b></span><span class="crit-src">Open Topo Data</span></div>
@@ -2200,6 +2183,51 @@ function searchByAddress(query) {
 }
 
 const KMA_KEY = '7g4sRCWvSE6OLEQlr8hOjQ';
+
+// ── 허브높이 풍속 조회: 대관령 ASOS(지상관측, 시간단위 실측) 우선, 실패 시 속초 레윈존데(고층관측) 폴백
+async function fetchHubWindSpeed(){
+  // 1) 대관령(관측소 100) ASOS 시간자료 — 사업지(강릉/정선/삼척)와 가장 가까운 실측 지점
+  try{
+    const now=new Date(Date.now()-60*60*1000); // 발표 지연 감안, 1시간 전 정시
+    const tm=now.toISOString().slice(0,10).replace(/-/g,'')+String(now.getUTCHours()).padStart(2,'0')+'00';
+    const r=await fetch(`/api/kma/sfctm.php?tm=${tm}&stn=100&help=0&authKey=${KMA_KEY}`);
+    const t=await r.text();
+    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
+    if(lines.length>0){
+      const cols=lines[0].trim().split(/\s+/);
+      const ws=parseFloat(cols[3]); // TM STN WD WS ...
+      if(!isNaN(ws)&&ws>=0&&ws<60){
+        return {windOk: ws>=5.7, windMs: `${ws.toFixed(1)}m/s (대관령 ASOS 실측)`};
+      }
+    }
+  }catch(e){ console.warn('대관령 ASOS 조회 실패, 레윈존데로 폴백:', e.message); }
+
+  // 2) 폴백: 속초 레윈존데(고층관측, 500~1500m 평균)
+  try{
+    const now=new Date();
+    const h=Math.floor(now.getUTCHours()/12)*12;
+    const tm=now.toISOString().slice(0,10).replace(/-/g,'')+String(h).padStart(2,'0')+'00';
+    const r=await fetch(`/api/kma/upp_temp.php?tm=${tm}&stn=90&pa=0&help=0&authKey=${KMA_KEY}`);
+    const t=await r.text();
+    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
+    const data=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
+      .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ht>=500&&d.ht<=1500);
+    if(data.length>0){
+      const avg=data.reduce((a,b)=>a+b.ws,0)/data.length;
+      return {windOk: avg>=5.7, windMs: `${avg.toFixed(1)}m/s (속초 레윈존데, 폴백)`};
+    }
+    const allData=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
+      .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ws>0);
+    if(allData.length>0){
+      const avg=allData.reduce((a,b)=>a+b.ws,0)/allData.length;
+      return {windOk: avg>=5.7, windMs: `${avg.toFixed(1)}m/s (속초 레윈존데, 폴백)`};
+    }
+    return {windOk:false, windMs:'데이터가 없습니다'};
+  }catch(e){
+    console.warn('풍속 API 오류:', e.message);
+    return {windOk:false, windMs:'API오류'};
+  }
+}
 
 // ── 생태자연도 1등급지 — 에코뱅크(국립생태원) ecoapi WFS
 // endpoint : apis.data.go.kr/B553084/ecoapi/EcologyzmpService/wfs/getEcologyzmpWFS
@@ -3491,16 +3519,8 @@ async function analyzeGeonCheonri(existTurbines){
   // ① 풍속
   let windOk=true,windMs='미확인';
   try{
-    const now=new Date();
-    const h=Math.floor(now.getUTCHours()/12)*12;
-    const tm=now.toISOString().slice(0,10).replace(/-/g,'')+String(h).padStart(2,'0')+'00';
-    const r=await fetch(`https://apihub.kma.go.kr/api/typ01/url/upp_temp.php?tm=${tm}&stn=90&pa=0&help=0&authKey=${KMA_KEY}`);
-    const t=await r.text();
-    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
-    const data=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
-      .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ht>=500&&d.ht<=1500);
-    const avg=data.length?(data.reduce((a,b)=>a+b.ws,0)/data.length):0;
-    windOk=avg>=6;windMs=avg.toFixed(1)+'m/s';
+    const res=await fetchHubWindSpeed();
+    windOk=res.windOk; windMs=res.windMs;
   }catch(e){windOk=true;}
 
   // ⑦⑧ 이격 + 터빈간 350m
@@ -4009,13 +4029,17 @@ function resetAnalysis(){
   document.getElementById('crit-summary').style.color='#94a3b8';
 }
 
-function setCritRow(idx, ok){
+function setCritRow(idx, ok, valueText){
   const rows=document.querySelectorAll('.crit-row');
   if(!rows[idx]) return;
   const st=rows[idx].querySelector('.crit-status');
   st.classList.remove('crit-pend','crit-ok','crit-ng');
   st.classList.add(ok?'crit-ok':'crit-ng');
   st.textContent=ok?'가능':'불가';
+  if(valueText){
+    const src=rows[idx].querySelector('.crit-src');
+    if(src) src.textContent=valueText;
+  }
   // 카운터 업데이트
   const ok_cnt=[...document.querySelectorAll('.crit-status')].filter(s=>s.classList.contains('crit-ok')).length;
   const ng_cnt=[...document.querySelectorAll('.crit-status')].filter(s=>s.classList.contains('crit-ng')).length;
@@ -4280,37 +4304,17 @@ async function startAnalysis(){
   }
   setStatus(`격자 ${grid.length}개 생성됨`,5);
 
-  // ① 풍속 (기상청 레윈존데 속초 관측소)
+  // ① 풍속 (대관령 ASOS 실측, 폴백: 속초 레윈존데)
   setStatus('① 풍속 확인 중...',10);
   let windOk=false, windMs='미확인';
   try{
-    const now=new Date();
-    const h=Math.floor(now.getUTCHours()/12)*12;
-    const tm=now.toISOString().slice(0,10).replace(/-/g,'')+String(h).padStart(2,'0')+'00';
-    const r=await fetch(`https://apihub.kma.go.kr/api/typ01/url/upp_temp.php?tm=${tm}&stn=90&pa=0&help=0&authKey=${KMA_KEY}`);
-    const t=await r.text();
-    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
-    const data=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
-      .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ht>=500&&d.ht<=1500);
-    if(data.length>0){
-      const avg=data.reduce((a,b)=>a+b.ws,0)/data.length;
-      windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
-    } else {
-      // 데이터 없으면 전체 고도 조회
-      const allData=lines.map(l=>{const p=l.trim().split(/\s+/);return{ht:parseFloat(p[2]),ws:parseFloat(p[7])};})
-        .filter(d=>!isNaN(d.ht)&&!isNaN(d.ws)&&d.ws>0);
-      if(allData.length>0){
-        const avg=allData.reduce((a,b)=>a+b.ws,0)/allData.length;
-        windOk=avg>=6; windMs=avg.toFixed(1)+'m/s';
-      } else {
-        windMs='데이터가 없습니다'; windOk=false;
-      }
-    }
+    const res=await fetchHubWindSpeed();
+    windOk=res.windOk; windMs=res.windMs;
   }catch(e){
     windMs='API오류'; windOk=false;
     console.warn('① 풍속 API 오류:', e.message);
   }
-  setCritRow(0, windOk);
+  setCritRow(0, windOk, windMs);
   setStatus(`① 풍속 ${windMs} ${windOk?'✅':'❌'}`, 15);
 
   // ④⑤ 고도·경사도 (netlify 프록시 → Open Topo Data)
@@ -4529,7 +4533,7 @@ async function startAnalysis(){
     lat: clickLat, lon: clickLon, radius: clickRadius,
     passCount: passCount,
     labels: [
-      ['①','풍속 6m/s 이상', windOk, windOk ? `측정값 ${windMs}` : `측정값 ${windMs} — 기준 미달`],
+      ['①','풍속 5.7m/s 이상', windOk, windOk ? `측정값 ${windMs}` : `측정값 ${windMs} — 기준 미달`],
       ['②','백두대간 미저촉', !baekduHit, baekduHit ? '백두대간 보호구역 내 위치' : '해당 없음'],
       ['③','생태1등급 미저촉', !ecoHit, ecoHit ? '생태자연도 1등급 구역 내 위치' : '해당 없음'],
       ['④','해발 500m 이상', highGrid.length>0, highGrid.length>0 ? `최고 ${maxElev}m 확인` : `분석 반경 내 500m 이상 지점 없음`],
