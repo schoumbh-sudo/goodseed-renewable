@@ -2,3 +2,5 @@
 /api/ecobank/*    https://apis.data.go.kr/B553084/ecoapi/:splat  200
 /api/egis/*       https://egisapp.me.go.kr/geoserver/wfs/:splat  200
 /api/vworld/*     https://api.vworld.kr/req/:splat  200
+/api/kma/upp_temp.php  https://apihub.kma.go.kr/api/typ01/url/upp_temp.php  200
+/api/kma/sfctm.php     https://apihub.kma.go.kr/api/typ01/url/kma_sfctm2.php  200
