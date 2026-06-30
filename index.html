@@ -2217,22 +2217,24 @@ function findNearestStation(lat, lon){
 // ── 허브높이 풍속 조회: 클릭 좌표와 가장 가까운 ASOS 관측소(지상관측, 시간단위 실측) 우선, 실패 시 속초 레윈존데(고층관측) 폴백
 async function fetchHubWindSpeed(lat, lon){
   const station = findNearestStation(lat, lon);
-  // 1) 최근접 ASOS 관측소 시간자료
+  // 1) 공공데이터포털 ASOS 시간자료(JSON, 필드명 명시) — 컬럼 순서 추측 불필요
   try{
     const now=new Date(Date.now()-60*60*1000); // 발표 지연 감안, 1시간 전 정시(KST)
-    const tm=toKmaTimeString(now);
-    const r=await fetch(`/api/kma/sfctm.php?tm=${tm}&stn=${station.stn}&help=0&authKey=${KMA_KEY}`);
-    const t=await r.text();
-    const lines=t.trim().split('\n').filter(l=>l&&!l.startsWith('#'));
-    if(lines.length>0){
-      const cols=lines[0].trim().split(/[\s,]+/).filter(Boolean);
-      const ws=parseFloat(cols[3]); // TM STN WD WS ...
-      console.log(`[풍속] ${station.name}(${station.stn}) ASOS 원본 응답 1행:`, lines[0], '→ tm 요청값(KST):', tm);
-      if(!isNaN(ws)&&ws>=0&&ws<60){
-        return {windOk: ws>=5.7, windMs: `${ws.toFixed(1)}m/s (${station.name} ASOS, ${tm.slice(8,10)}시 KST 기준)`};
-      }
+    const kst=new Date(now.getTime()+9*60*60*1000);
+    const pad=n=>String(n).padStart(2,'0');
+    const dt=`${kst.getUTCFullYear()}${pad(kst.getUTCMonth()+1)}${pad(kst.getUTCDate())}`;
+    const hh=pad(kst.getUTCHours());
+    const url=`/api/asos/getWthrDataList?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataCd=ASOS&dateCd=HR`+
+      `&startDt=${dt}&startHh=${hh}&endDt=${dt}&endHh=${hh}&stnIds=${station.stn}&dataType=JSON`;
+    const r=await fetch(url);
+    const j=await r.json();
+    const item=j?.response?.body?.items?.item?.[0];
+    console.log(`[풍속] ${station.name}(${station.stn}) ASOS(공공데이터포털) 응답:`, item, `→ 요청 ${dt} ${hh}시(KST)`);
+    const ws=item?parseFloat(item.ws):NaN;
+    if(!isNaN(ws)&&ws>=0&&ws<60){
+      return {windOk: ws>=5.7, windMs: `${ws.toFixed(1)}m/s (${station.name} ASOS, ${hh}시 KST 기준)`};
     }
-  }catch(e){ console.warn(`${station.name} ASOS 조회 실패, 레윈존데로 폴백:`, e.message); }
+  }catch(e){ console.warn(`${station.name} ASOS(공공데이터포털) 조회 실패:`, e.message); }
 
   // 2) 폴백: 속초 레윈존데(고층관측, 500~1500m 평균)
   try{

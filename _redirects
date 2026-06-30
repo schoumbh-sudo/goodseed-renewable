@@ -4,3 +4,4 @@
 /api/vworld/*     https://api.vworld.kr/req/:splat  200
 /api/kma/upp_temp.php  https://apihub.kma.go.kr/api/typ01/url/upp_temp.php  200
 /api/kma/sfctm.php     https://apihub.kma.go.kr/api/typ01/url/kma_sfctm2.php  200
+/api/asos/*       https://apis.data.go.kr/1360000/AsosHourlyInfoService/:splat  200
